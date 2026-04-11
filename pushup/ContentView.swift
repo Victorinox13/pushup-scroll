@@ -6,36 +6,45 @@
 //
 
 import AVFoundation
+import Combine
+import FamilyControls
+import ManagedSettings
 import SwiftUI
 import UIKit
+import UserNotifications
 import Vision
 
-struct SupportedApp: Identifiable, Hashable {
-    let name: String
-    let icon: String
+struct RepBank {
+    struct Offer: Identifiable, Hashable {
+        let minutes: Int
+        let repCost: Int
 
-    var id: String { name }
-
-    static let defaults: [SupportedApp] = [
-        SupportedApp(name: "TikTok", icon: "music.note.tv"),
-        SupportedApp(name: "Instagram", icon: "camera"),
-        SupportedApp(name: "YouTube", icon: "play.rectangle"),
-        SupportedApp(name: "X", icon: "bubble.left.and.text.bubble.right"),
-        SupportedApp(name: "Reddit", icon: "text.bubble")
-    ]
-}
-
-struct TimeBank {
-    let pushupCount: Int
-    let minutesPerPushup: Int
-    let usedMinutes: Int
-
-    var earnedMinutes: Int {
-        pushupCount * minutesPerPushup
+        var id: String { "\(minutes)-\(repCost)" }
     }
 
-    var remainingMinutes: Int {
-        max(earnedMinutes - usedMinutes, 0)
+    let totalReps: Int
+    let spentReps: Int
+    let unlockedMinutes: Int
+
+    let offers: [Offer] = [
+        Offer(minutes: 5, repCost: 2),
+        Offer(minutes: 15, repCost: 5),
+        Offer(minutes: 30, repCost: 10),
+        Offer(minutes: 60, repCost: 20)
+    ]
+
+    var repCoins: Int {
+        max(totalReps - spentReps, 0)
+    }
+
+    func canRedeem(_ offer: Offer) -> Bool {
+        repCoins >= offer.repCost
+    }
+}
+
+extension Date {
+    var timeIntervalStorageValue: Double {
+        timeIntervalSince1970
     }
 }
 
@@ -203,6 +212,10 @@ final class PushupCameraModel: NSObject, ObservableObject, AVCaptureVideoDataOut
     private var processedFrameCount = 0
 
     func start() {
+        #if targetEnvironment(simulator)
+        accessState = .unavailable
+        statusText = "Simulator does not provide live iPhone camera capture. Run this on a real device."
+        #else
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             accessState = .granted
@@ -227,6 +240,7 @@ final class PushupCameraModel: NSObject, ObservableObject, AVCaptureVideoDataOut
             accessState = .failed
             statusText = "Camera authorization returned an unknown state."
         }
+        #endif
     }
 
     func stop() {
@@ -399,29 +413,63 @@ final class PreviewView: UIView {
 }
 
 struct ContentView: View {
+    @Environment(\.scenePhase) private var scenePhase
+
     @AppStorage("pushupCount") private var pushupCount = 0
-    @AppStorage("minutesPerPushup") private var minutesPerPushup = 5
-    @AppStorage("usedMinutes") private var usedMinutes = 0
-    @AppStorage("selectedApps") private var selectedAppsStorage = "TikTok,Instagram"
+    @AppStorage("spentReps") private var spentReps = 0
+    @AppStorage("unlockedMinutes") private var unlockedMinutes = 0
+    @AppStorage("screenTimeSelectionData") private var screenTimeSelectionData = ""
+    @AppStorage("unlockEndsAt") private var unlockEndsAt = 0.0
 
     @StateObject private var cameraModel = PushupCameraModel()
+    @State private var isTrackingReps = false
+    @State private var showingSpendOptions = false
+    @State private var familyActivitySelection = FamilyActivitySelection()
+    @State private var showingAppPicker = false
+    @State private var appPickerError: String?
+    @State private var hasLoadedSelection = false
+    @State private var currentTime = Date()
+    @State private var showingAppChangeChallenge = false
+    @State private var challengeBaselineReps = 0
 
-    private let supportedApps = SupportedApp.defaults
+    private let shieldStore = ManagedSettingsStore(named: .init("pushup.shield"))
+    private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    private let appChangeChallengeTarget = 5
 
-    private var bank: TimeBank {
-        TimeBank(
-            pushupCount: pushupCount,
-            minutesPerPushup: minutesPerPushup,
-            usedMinutes: usedMinutes
+    private var bank: RepBank {
+        RepBank(
+            totalReps: pushupCount,
+            spentReps: spentReps,
+            unlockedMinutes: unlockedMinutes
         )
     }
 
-    private var selectedApps: Set<String> {
-        Set(
-            selectedAppsStorage
-                .split(separator: ",")
-                .map { String($0) }
-        )
+    private var unlockEndDate: Date? {
+        unlockEndsAt > 0 ? Date(timeIntervalSince1970: unlockEndsAt) : nil
+    }
+
+    private var unlockIsActive: Bool {
+        guard let unlockEndDate else { return false }
+        return unlockEndDate > currentTime
+    }
+
+    private var remainingUnlockedSeconds: Int {
+        guard let unlockEndDate else { return 0 }
+        return max(Int(ceil(unlockEndDate.timeIntervalSince(currentTime))), 0)
+    }
+
+    private var selectedAppsCount: Int {
+        familyActivitySelection.applicationTokens.count
+        + familyActivitySelection.categoryTokens.count
+        + familyActivitySelection.webDomainTokens.count
+    }
+
+    private var needsInitialSelection: Bool {
+        hasLoadedSelection && selectedAppsCount == 0
+    }
+
+    private var challengeCompletedReps: Int {
+        max(pushupCount - challengeBaselineReps, 0)
     }
 
     var body: some View {
@@ -437,26 +485,94 @@ struct ContentView: View {
             )
             .ignoresSafeArea()
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+            if needsInitialSelection {
+                onboardingView
+            } else {
+                VStack(alignment: .leading, spacing: 20) {
                     header
                     balanceCard
                     cameraCard
                     selectedAppsCard
-                    rulesCard
+                    Spacer(minLength: 0)
                 }
                 .padding(20)
+                .padding(.bottom, 8)
+            }
+        }
+        .familyActivityPicker(
+            headerText: "Choose apps and websites to manage",
+            footerText: "These selections are used for your Screen Time setup.",
+            isPresented: $showingAppPicker,
+            selection: $familyActivitySelection
+        )
+        .overlay {
+            if showingAppChangeChallenge {
+                appChangeChallengeOverlay
             }
         }
         .onAppear {
             cameraModel.onRepCounted = {
                 pushupCount += 1
+                if showingAppChangeChallenge, challengeCompletedReps >= appChangeChallengeTarget {
+                    completeAppChangeChallenge()
+                }
             }
-            cameraModel.start()
+            loadSavedSelection()
+            requestNotificationAuthorization()
         }
         .onDisappear {
             cameraModel.stop()
         }
+        .onChange(of: familyActivitySelection) {
+            guard hasLoadedSelection else { return }
+            persistSelection()
+            applyShields()
+        }
+        .onChange(of: scenePhase) {
+            if scenePhase == .active {
+                refreshUnlockState()
+            }
+        }
+        .onReceive(timer) { _ in
+            currentTime = Date()
+            refreshUnlockState()
+        }
+    }
+
+    private var onboardingView: some View {
+        VStack(spacing: 24) {
+            Spacer()
+
+            VStack(alignment: .leading, spacing: 18) {
+                Text("Good choice.")
+                    .font(.system(size: 38, weight: .black, design: .rounded))
+                    .foregroundStyle(.white)
+
+                Text("You downloaded this app for a reason. Pick the apps you want to stop mindlessly opening, and the lock starts as soon as you finish choosing them.")
+                    .font(.system(.title3, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.82))
+
+                quickButton(title: "Select Screen Time Apps") {
+                    presentInitialAppPicker()
+                }
+
+                if let appPickerError {
+                    Text(appPickerError)
+                        .font(.system(.footnote, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.72))
+                }
+            }
+            .padding(24)
+            .background(.white.opacity(0.12))
+            .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 30, style: .continuous)
+                    .stroke(.white.opacity(0.12), lineWidth: 1)
+            )
+
+            Spacer()
+        }
+        .padding(20)
     }
 
     private var header: some View {
@@ -473,23 +589,78 @@ struct ContentView: View {
 
     private var balanceCard: some View {
         VStack(alignment: .leading, spacing: 18) {
-            Text("Time Bank")
-                .font(.system(.headline, design: .rounded))
-                .foregroundStyle(.white.opacity(0.9))
+            HStack {
+                Text("Rep Bank")
+                    .font(.system(.headline, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.9))
+
+                Spacer()
+
+                Button(showingSpendOptions ? "Hide" : "Rot Away") {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
+                        showingSpendOptions.toggle()
+                    }
+                }
+                .font(.system(.subheadline, design: .rounded))
+                .fontWeight(.bold)
+                .foregroundStyle(.black)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Color.white)
+                .clipShape(Capsule())
+            }
 
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("\(bank.remainingMinutes)")
+                Text("\(bank.repCoins)")
                     .font(.system(size: 54, weight: .black, design: .rounded))
                     .foregroundStyle(.white)
-                Text("minutes left")
+                Text("rep coins")
                     .font(.system(.title3, design: .rounded))
                     .foregroundStyle(.white.opacity(0.7))
             }
 
+            if unlockIsActive {
+                Text("Unlocked for \(formattedUnlockTime)")
+                    .font(.system(.subheadline, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.78))
+            }
+
+            if showingSpendOptions {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Buy minutes")
+                        .font(.system(.subheadline, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.78))
+
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 76), spacing: 10)], spacing: 10) {
+                        ForEach(bank.offers) { offer in
+                            Button {
+                                redeem(offer)
+                            } label: {
+                                VStack(spacing: 4) {
+                                    Text("\(offer.minutes)m")
+                                    Text("\(offer.repCost) reps")
+                                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                                }
+                                .font(.system(.body, design: .rounded))
+                                .fontWeight(.bold)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 14)
+                                .foregroundStyle(bank.canRedeem(offer) ? Color.black : .white.opacity(0.45))
+                                .background(bank.canRedeem(offer) ? Color.white : Color.white.opacity(0.08))
+                                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(!bank.canRedeem(offer))
+                        }
+                    }
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
+
             HStack(spacing: 12) {
-                statPill(title: "Pushups", value: "\(pushupCount)")
-                statPill(title: "Earned", value: "\(bank.earnedMinutes)m")
-                statPill(title: "Used", value: "\(usedMinutes)m")
+                statPill(title: "Reps", value: "\(pushupCount)")
+                statPill(title: "Unlocked", value: "\(unlockedMinutes)m")
+                statPill(title: "Spent", value: "\(spentReps)")
             }
         }
         .padding(20)
@@ -504,34 +675,44 @@ struct ContentView: View {
 
     private var cameraCard: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Rep Tracker")
-                .font(.system(.headline, design: .rounded))
-                .foregroundStyle(.white)
+            HStack {
+                Text("Rep Tracker")
+                    .font(.system(.headline, design: .rounded))
+                    .foregroundStyle(.white)
 
-            cameraSurface
+                Spacer()
 
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Circle()
-                        .fill(cameraModel.faceDetected ? Color.green : Color.white.opacity(0.35))
-                        .frame(width: 10, height: 10)
-                    Text(cameraModel.statusText)
-                        .font(.system(.subheadline, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.86))
+                if isTrackingReps {
+                    Button("Stop") {
+                        isTrackingReps = false
+                        cameraModel.stop()
+                    }
+                    .font(.system(.subheadline, design: .rounded))
+                    .fontWeight(.bold)
+                    .foregroundStyle(.white)
                 }
+            }
 
-                ProgressView(value: cameraModel.repProgress)
-                    .tint(.white)
+            if isTrackingReps {
+                cameraSurface
 
-                HStack(spacing: 12) {
-                    quickButton(title: "Use 5 min", isPrimary: false) {
-                        usedMinutes = min(bank.earnedMinutes, usedMinutes + 5)
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Circle()
+                            .fill(cameraModel.faceDetected ? Color.green : Color.white.opacity(0.35))
+                            .frame(width: 10, height: 10)
+                        Text(cameraModel.statusText)
+                            .font(.system(.subheadline, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.86))
                     }
 
-                    quickButton(title: "Reset day", isPrimary: false) {
-                        pushupCount = 0
-                        usedMinutes = 0
-                    }
+                    ProgressView(value: cameraModel.repProgress)
+                        .tint(.white)
+                }
+            } else {
+                quickButton(title: "Track Reps") {
+                    isTrackingReps = true
+                    cameraModel.start()
                 }
             }
         }
@@ -575,74 +756,91 @@ struct ContentView: View {
 
     private var selectedAppsCard: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Target Apps")
-                .font(.system(.headline, design: .rounded))
-                .foregroundStyle(.white)
-
-            Text("These are the apps you want to earn time for. The Screen Time enforcement layer still needs to be connected separately.")
-                .font(.system(.subheadline, design: .rounded))
-                .foregroundStyle(.white.opacity(0.72))
-
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                ForEach(supportedApps) { app in
-                    Button {
-                        toggleSelection(for: app.name)
-                    } label: {
-                        HStack(spacing: 10) {
-                            Image(systemName: app.icon)
-                                .frame(width: 28, height: 28)
-                            Text(app.name)
-                                .font(.system(.body, design: .rounded))
-                                .fontWeight(.semibold)
-                            Spacer(minLength: 0)
-                            Image(systemName: selectedApps.contains(app.name) ? "checkmark.circle.fill" : "circle")
-                        }
-                        .foregroundStyle(.white)
-                        .padding(14)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(selectedApps.contains(app.name) ? Color.white.opacity(0.20) : Color.white.opacity(0.08))
-                        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
+            Button {
+                handleAppsButtonTapped()
+            } label: {
+                HStack {
+                    Text("Apps: \(selectedAppsCount)")
+                        .font(.system(.headline, design: .rounded))
+                        .fontWeight(.bold)
+                    Spacer()
+                    Image(systemName: "hourglass.circle")
+                        .font(.system(size: 18, weight: .semibold))
                 }
+                .foregroundStyle(.white)
+                .padding(18)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.white.opacity(0.10))
+                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+            }
+            .buttonStyle(.plain)
+
+            if let appPickerError {
+                Text(appPickerError)
+                    .font(.system(.footnote, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.72))
             }
         }
-        .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.white.opacity(0.10))
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
     }
 
-    private var rulesCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Rules")
-                .font(.system(.headline, design: .rounded))
-                .foregroundStyle(.white)
+    private var appChangeChallengeOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.7)
+                .ignoresSafeArea()
 
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 18) {
+                Text("Earn the change")
+                    .font(.system(size: 30, weight: .black, design: .rounded))
+                    .foregroundStyle(.white)
+
+                Text("Do 5 pushups to change your protected apps.")
+                    .font(.system(.title3, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.8))
+
+                cameraSurface
+
                 HStack {
-                    Text("Minutes per pushup")
+                    Text("\(challengeCompletedReps)/\(appChangeChallengeTarget) reps")
+                        .font(.system(.headline, design: .rounded))
+                        .foregroundStyle(.white)
                     Spacer()
-                    Stepper("\(minutesPerPushup)", value: $minutesPerPushup, in: 1...20)
-                        .labelsHidden()
-                    Text("\(minutesPerPushup)m")
-                        .fontWeight(.bold)
+                    Button("Cancel") {
+                        cancelAppChangeChallenge()
+                    }
+                    .font(.system(.subheadline, design: .rounded))
+                    .fontWeight(.bold)
+                    .foregroundStyle(.white)
                 }
 
+                ProgressView(value: Double(challengeCompletedReps), total: Double(appChangeChallengeTarget))
+                    .tint(.white)
+
                 HStack {
-                    Text("Selected apps")
-                    Spacer()
-                    Text(selectedApps.isEmpty ? "None" : "\(selectedApps.count)")
-                        .fontWeight(.bold)
+                    Circle()
+                        .fill(cameraModel.faceDetected ? Color.green : Color.white.opacity(0.35))
+                        .frame(width: 10, height: 10)
+                    Text(cameraModel.statusText)
+                        .font(.system(.subheadline, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.86))
                 }
             }
-            .font(.system(.body, design: .rounded))
-            .foregroundStyle(.white.opacity(0.9))
+            .padding(22)
+            .background(Color.black.opacity(0.85))
+            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 28, style: .continuous)
+                    .stroke(.white.opacity(0.10), lineWidth: 1)
+            )
+            .padding(20)
         }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.black.opacity(0.25))
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+    }
+
+    private var formattedUnlockTime: String {
+        let totalSeconds = remainingUnlockedSeconds
+        let minutes = totalSeconds / 60
+        let seconds = totalSeconds % 60
+        return String(format: "%02d:%02d", minutes, seconds)
     }
 
     private func statPill(title: String, value: String) -> some View {
@@ -688,16 +886,142 @@ struct ContentView: View {
             }
     }
 
-    private func toggleSelection(for appName: String) {
-        var updated = selectedApps
+    private func redeem(_ offer: RepBank.Offer) {
+        guard bank.canRedeem(offer) else { return }
+        spentReps += offer.repCost
+        unlockedMinutes += offer.minutes
+        let start = max(unlockEndDate ?? .now, .now)
+        let endDate = start.addingTimeInterval(TimeInterval(offer.minutes * 60))
+        unlockEndsAt = endDate.timeIntervalStorageValue
+        scheduleUnlockNotifications(for: endDate)
+        applyShields()
+    }
 
-        if updated.contains(appName) {
-            updated.remove(appName)
-        } else {
-            updated.insert(appName)
+    private func presentAppPicker() {
+        Task {
+            do {
+                try await AuthorizationCenter.shared.requestAuthorization(for: .individual)
+                await MainActor.run {
+                    appPickerError = nil
+                    showingAppPicker = true
+                }
+            } catch {
+                await MainActor.run {
+                    let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                    appPickerError = "Screen Time unavailable: \(message)"
+                }
+            }
+        }
+    }
+
+    private func presentInitialAppPicker() {
+        presentAppPicker()
+    }
+
+    private func handleAppsButtonTapped() {
+        if selectedAppsCount == 0 {
+            presentInitialAppPicker()
+            return
         }
 
-        selectedAppsStorage = updated.sorted().joined(separator: ",")
+        beginAppChangeChallenge()
+    }
+
+    private func loadSavedSelection() {
+        guard !screenTimeSelectionData.isEmpty,
+              let data = Data(base64Encoded: screenTimeSelectionData),
+              let selection = try? JSONDecoder().decode(FamilyActivitySelection.self, from: data) else {
+            hasLoadedSelection = true
+            applyShields()
+            return
+        }
+
+        familyActivitySelection = selection
+        hasLoadedSelection = true
+        applyShields()
+    }
+
+    private func persistSelection() {
+        guard let data = try? JSONEncoder().encode(familyActivitySelection) else { return }
+        screenTimeSelectionData = data.base64EncodedString()
+    }
+
+    private func applyShields() {
+        guard !unlockIsActive else {
+            shieldStore.clearAllSettings()
+            return
+        }
+
+        let selection = familyActivitySelection
+        shieldStore.shield.applications = selection.applicationTokens.isEmpty ? nil : selection.applicationTokens
+        shieldStore.shield.applicationCategories = selection.categoryTokens.isEmpty ? nil : .specific(selection.categoryTokens)
+        shieldStore.shield.webDomains = selection.webDomainTokens.isEmpty ? nil : selection.webDomainTokens
+        shieldStore.shield.webDomainCategories = selection.categoryTokens.isEmpty ? nil : .specific(selection.categoryTokens)
+    }
+
+    private func refreshUnlockState() {
+        guard let unlockEndDate else { return }
+        if unlockEndDate <= currentTime {
+            unlockEndsAt = 0
+            applyShields()
+        }
+    }
+
+    private func requestNotificationAuthorization() {
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+    }
+
+    private func scheduleUnlockNotifications(for endDate: Date) {
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: ["unlock-warning", "unlock-ended"])
+
+        let warningInterval = endDate.timeIntervalSinceNow - 10
+        if warningInterval > 0 {
+            let content = UNMutableNotificationContent()
+            content.title = "Time almost up"
+            content.body = "Your selected apps lock again in 10 seconds."
+            content.sound = .default
+
+            let request = UNNotificationRequest(
+                identifier: "unlock-warning",
+                content: content,
+                trigger: UNTimeIntervalNotificationTrigger(timeInterval: warningInterval, repeats: false)
+            )
+            center.add(request)
+        }
+
+        let endInterval = endDate.timeIntervalSinceNow
+        if endInterval > 0 {
+            let content = UNMutableNotificationContent()
+            content.title = "Time is up"
+            content.body = "Your selected apps are locked again."
+            content.sound = .default
+
+            let request = UNNotificationRequest(
+                identifier: "unlock-ended",
+                content: content,
+                trigger: UNTimeIntervalNotificationTrigger(timeInterval: endInterval, repeats: false)
+            )
+            center.add(request)
+        }
+    }
+
+    private func beginAppChangeChallenge() {
+        challengeBaselineReps = pushupCount
+        showingAppChangeChallenge = true
+        isTrackingReps = false
+        cameraModel.start()
+    }
+
+    private func cancelAppChangeChallenge() {
+        showingAppChangeChallenge = false
+        cameraModel.stop()
+    }
+
+    private func completeAppChangeChallenge() {
+        showingAppChangeChallenge = false
+        cameraModel.stop()
+        presentAppPicker()
     }
 }
 
