@@ -57,6 +57,14 @@ enum CameraAccessState {
     case failed
 }
 
+enum OnboardingStage {
+    case loading
+    case appSelection
+    case notificationPermission
+    case cameraPermission
+    case introChallenge
+}
+
 struct PushupDetectorUpdate {
     let statusText: String
     let progress: CGFloat
@@ -88,7 +96,7 @@ struct PushupRepDetector {
             baselineArea = nil
             smoothedArea = nil
             return PushupDetectorUpdate(
-                statusText: "Move your face into the frame.",
+                statusText: "Get in frame.",
                 progress: 0,
                 didCompleteRep: false,
                 faceDetected: false
@@ -113,7 +121,7 @@ struct PushupRepDetector {
             calibrationSamples += 1
 
             return PushupDetectorUpdate(
-                statusText: calibrationSamples >= calibrationTarget ? "Start your rep." : "Hold the top position to calibrate.",
+                statusText: calibrationSamples >= calibrationTarget ? "Start." : "Hold at top.",
                 progress: 0,
                 didCompleteRep: false,
                 faceDetected: true
@@ -124,7 +132,7 @@ struct PushupRepDetector {
                 phase = .calibrating
                 calibrationSamples = 0
                 return PushupDetectorUpdate(
-                    statusText: "Recalibrating...",
+                    statusText: "Resetting...",
                     progress: 0,
                     didCompleteRep: false,
                     faceDetected: true
@@ -141,7 +149,7 @@ struct PushupRepDetector {
             if ratio >= lowerThreshold {
                 phase = .lowered
                 return PushupDetectorUpdate(
-                    statusText: "Push back up.",
+                    statusText: "Push up.",
                     progress: 1,
                     didCompleteRep: false,
                     faceDetected: true
@@ -149,7 +157,7 @@ struct PushupRepDetector {
             }
 
             return PushupDetectorUpdate(
-                statusText: "Lower down until your face gets closer to the phone.",
+                statusText: "Lower down.",
                 progress: progress,
                 didCompleteRep: false,
                 faceDetected: true
@@ -160,7 +168,7 @@ struct PushupRepDetector {
                 phase = .calibrating
                 calibrationSamples = 0
                 return PushupDetectorUpdate(
-                    statusText: "Recalibrating...",
+                    statusText: "Resetting...",
                     progress: 0,
                     didCompleteRep: false,
                     faceDetected: true
@@ -172,7 +180,7 @@ struct PushupRepDetector {
                 phase = .ready
                 self.baselineArea = filteredArea
                 return PushupDetectorUpdate(
-                    statusText: "Rep counted.",
+                    statusText: "Rep done.",
                     progress: 0,
                     didCompleteRep: true,
                     faceDetected: true
@@ -180,7 +188,7 @@ struct PushupRepDetector {
             }
 
             return PushupDetectorUpdate(
-                statusText: "Push higher to finish the rep.",
+                statusText: "Go higher.",
                 progress: 1,
                 didCompleteRep: false,
                 faceDetected: true
@@ -210,12 +218,64 @@ final class PushupCameraModel: NSObject, ObservableObject, AVCaptureVideoDataOut
     private var isConfigured = false
     private var detector = PushupRepDetector()
     private var processedFrameCount = 0
+    private var shouldBeRunning = false
 
-    func start() {
+    override init() {
+        super.init()
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleSessionRuntimeError),
+            name: AVCaptureSession.runtimeErrorNotification,
+            object: session
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleSessionInterrupted),
+            name: AVCaptureSession.wasInterruptedNotification,
+            object: session
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleSessionInterruptionEnded),
+            name: AVCaptureSession.interruptionEndedNotification,
+            object: session
+        )
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    func refreshAuthorizationStatus() {
         #if targetEnvironment(simulator)
         accessState = .unavailable
         statusText = "Simulator does not provide live iPhone camera capture. Run this on a real device."
         #else
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            accessState = .granted
+        case .notDetermined:
+            accessState = .idle
+            statusText = "Camera access is required to verify pushups."
+        case .denied, .restricted:
+            accessState = .denied
+            statusText = "Enable camera access in Settings to track real reps."
+        @unknown default:
+            accessState = .failed
+            statusText = "Camera authorization returned an unknown state."
+        }
+        #endif
+    }
+
+    func start() {
+        shouldBeRunning = true
+        print("[pushup] camera.start requested; sessionRunning=\(sessionRunning)")
+        #if targetEnvironment(simulator)
+        accessState = .unavailable
+        statusText = "Simulator does not provide live iPhone camera capture. Run this on a real device."
+        #else
+        guard !sessionRunning else { return }
+
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             accessState = .granted
@@ -243,14 +303,56 @@ final class PushupCameraModel: NSObject, ObservableObject, AVCaptureVideoDataOut
         #endif
     }
 
+    func requestAccessIfNeeded(completion: ((Bool) -> Void)? = nil) {
+        #if targetEnvironment(simulator)
+        accessState = .unavailable
+        statusText = "Simulator does not provide live iPhone camera capture. Run this on a real device."
+        completion?(false)
+        #else
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            accessState = .granted
+            completion?(true)
+        case .notDetermined:
+            accessState = .requesting
+            statusText = "Waiting for camera access..."
+            AVCaptureDevice.requestAccess(for: .video) { [weak self] granted in
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    self.accessState = granted ? .granted : .denied
+                    self.statusText = granted ? "Camera ready." : "Enable camera in Settings."
+                    completion?(granted)
+                }
+            }
+        case .denied, .restricted:
+            accessState = .denied
+            statusText = "Enable camera in Settings."
+            completion?(false)
+        @unknown default:
+            accessState = .failed
+            statusText = "Camera check failed."
+            completion?(false)
+        }
+        #endif
+    }
+
     func stop() {
+        stop(completion: nil)
+    }
+
+    func stop(completion: (() -> Void)?) {
+        shouldBeRunning = false
+        print("[pushup] camera.stop requested; sessionRunning=\(sessionRunning)")
         sessionQueue.async { [weak self] in
             guard let self else { return }
             if self.session.isRunning {
                 self.session.stopRunning()
             }
             DispatchQueue.main.async {
+                self.resetTrackingState()
                 self.sessionRunning = false
+                print("[pushup] camera.stop completed")
+                completion?()
             }
         }
     }
@@ -258,15 +360,69 @@ final class PushupCameraModel: NSObject, ObservableObject, AVCaptureVideoDataOut
     private func configureAndStartIfNeeded() {
         sessionQueue.async { [weak self] in
             guard let self else { return }
+            guard self.shouldBeRunning else { return }
             guard self.prepareSessionIfNeeded() else { return }
+            guard self.shouldBeRunning else { return }
 
             if !self.session.isRunning {
+                print("[pushup] camera.startRunning")
                 self.session.startRunning()
             }
 
             DispatchQueue.main.async {
+                guard self.shouldBeRunning else {
+                    self.sessionQueue.async {
+                        if self.session.isRunning {
+                            self.session.stopRunning()
+                        }
+                    }
+                    self.resetTrackingState()
+                    self.sessionRunning = false
+                    return
+                }
                 self.sessionRunning = true
                 self.statusText = "Hold the top of your pushup to calibrate."
+                print("[pushup] camera running")
+            }
+        }
+    }
+
+    private func resetTrackingState() {
+        detector = PushupRepDetector()
+        processedFrameCount = 0
+        faceDetected = false
+        repProgress = 0
+        if accessState == .granted {
+            statusText = "Camera ready."
+        }
+    }
+
+    @objc
+    private func handleSessionRuntimeError(_ notification: Notification) {
+        let errorDescription = (notification.userInfo?[AVCaptureSessionErrorKey] as? NSError)?.localizedDescription ?? "unknown"
+        print("[pushup] camera runtime error: \(errorDescription)")
+        DispatchQueue.main.async {
+            self.accessState = .failed
+            self.statusText = "Camera runtime error."
+            self.sessionRunning = false
+        }
+    }
+
+    @objc
+    private func handleSessionInterrupted(_ notification: Notification) {
+        print("[pushup] camera interrupted: \(String(describing: notification.userInfo))")
+        DispatchQueue.main.async {
+            self.statusText = "Camera interrupted."
+            self.sessionRunning = false
+        }
+    }
+
+    @objc
+    private func handleSessionInterruptionEnded(_ notification: Notification) {
+        print("[pushup] camera interruption ended")
+        DispatchQueue.main.async {
+            if self.shouldBeRunning {
+                self.statusText = "Camera interruption ended."
             }
         }
     }
@@ -363,9 +519,9 @@ final class PushupCameraModel: NSObject, ObservableObject, AVCaptureVideoDataOut
 
         var update = detector.process(faceArea: faceArea)
         detector.advanceCalibrationIfNeeded()
-        if detector.phase == .ready, update.statusText == "Start your rep." {
+        if detector.phase == .ready, update.statusText == "Start." {
             update = PushupDetectorUpdate(
-                statusText: "Lower down until your face gets closer to the phone.",
+                statusText: "Lower down.",
                 progress: 0,
                 didCompleteRep: false,
                 faceDetected: true
@@ -420,6 +576,7 @@ struct ContentView: View {
     @AppStorage("unlockedMinutes") private var unlockedMinutes = 0
     @AppStorage("screenTimeSelectionData") private var screenTimeSelectionData = ""
     @AppStorage("unlockEndsAt") private var unlockEndsAt = 0.0
+    @AppStorage("hasCompletedInitialSetup") private var hasCompletedInitialSetup = false
 
     @StateObject private var cameraModel = PushupCameraModel()
     @State private var isTrackingReps = false
@@ -431,10 +588,20 @@ struct ContentView: View {
     @State private var currentTime = Date()
     @State private var showingAppChangeChallenge = false
     @State private var challengeBaselineReps = 0
+    @State private var showingLaunchScreen = true
+    @State private var onboardingBaselineReps = 0
+    @State private var hasPreparedOnboardingChallenge = false
+    @State private var showingPermissionStatusSheet = false
+    @State private var notificationAuthorizationStatus: UNAuthorizationStatus = .notDetermined
+    @State private var screenTimeAuthorizationStatus: AuthorizationStatus = .notDetermined
+    @State private var isRequestingNotificationPermission = false
+    @State private var isRequestingScreenTimePermission = false
+    @State private var isOpeningRepTracker = false
 
     private let shieldStore = ManagedSettingsStore(named: .init("pushup.shield"))
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     private let appChangeChallengeTarget = 5
+    private let introChallengeTarget = 5
 
     private var bank: RepBank {
         RepBank(
@@ -464,29 +631,43 @@ struct ContentView: View {
         + familyActivitySelection.webDomainTokens.count
     }
 
-    private var needsInitialSelection: Bool {
-        hasLoadedSelection && selectedAppsCount == 0
+    private var onboardingStage: OnboardingStage? {
+        if showingLaunchScreen || !hasLoadedSelection {
+            return .loading
+        }
+
+        guard !hasCompletedInitialSetup else { return nil }
+
+        if selectedAppsCount == 0 {
+            return .appSelection
+        }
+
+        guard notificationsAreEnabled else {
+            return .notificationPermission
+        }
+
+        switch cameraModel.accessState {
+        case .granted:
+            return .introChallenge
+        case .idle, .requesting, .denied, .unavailable, .failed:
+            return .cameraPermission
+        }
     }
 
     private var challengeCompletedReps: Int {
         max(pushupCount - challengeBaselineReps, 0)
     }
 
+    private var onboardingCompletedReps: Int {
+        max(pushupCount - onboardingBaselineReps, 0)
+    }
+
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [
-                    Color(red: 0.97, green: 0.54, blue: 0.25),
-                    Color(red: 0.70, green: 0.18, blue: 0.12),
-                    Color.black.opacity(0.92)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            themeBackground
 
-            if needsInitialSelection {
-                onboardingView
+            if let onboardingStage {
+                onboardingView(for: onboardingStage)
             } else {
                 VStack(alignment: .leading, spacing: 20) {
                     header
@@ -499,38 +680,68 @@ struct ContentView: View {
                 .padding(.bottom, 8)
             }
         }
-        .familyActivityPicker(
-            headerText: "Choose apps and websites to manage",
-            footerText: "These selections are used for your Screen Time setup.",
-            isPresented: $showingAppPicker,
-            selection: $familyActivitySelection
-        )
+        .sheet(isPresented: $showingAppPicker, onDismiss: {
+            print("[pushup] app picker dismissed")
+            refreshPermissionStatuses()
+        }) {
+            appPickerSheet
+        }
+        .sheet(isPresented: $showingPermissionStatusSheet) {
+            permissionStatusSheet
+        }
         .overlay {
             if showingAppChangeChallenge {
                 appChangeChallengeOverlay
+            } else if isTrackingReps {
+                repTrackerOverlay
             }
         }
         .onAppear {
+            print("[pushup] content view appeared")
             cameraModel.onRepCounted = {
                 pushupCount += 1
+                print("[pushup] rep counted; total=\(pushupCount)")
+                if !hasCompletedInitialSetup,
+                   onboardingCompletedReps >= introChallengeTarget {
+                    completeInitialSetup()
+                }
                 if showingAppChangeChallenge, challengeCompletedReps >= appChangeChallengeTarget {
                     completeAppChangeChallenge()
                 }
             }
-            loadSavedSelection()
-            requestNotificationAuthorization()
+            startInitialLoad()
         }
         .onDisappear {
+            print("[pushup] content view disappeared")
             cameraModel.stop()
         }
         .onChange(of: familyActivitySelection) {
             guard hasLoadedSelection else { return }
+            print("[pushup] family activity selection changed; apps=\(familyActivitySelection.applicationTokens.count) categories=\(familyActivitySelection.categoryTokens.count) domains=\(familyActivitySelection.webDomainTokens.count)")
             persistSelection()
             applyShields()
+            if !hasCompletedInitialSetup, selectedAppsCount > 0 {
+                cameraModel.refreshAuthorizationStatus()
+            }
+        }
+        .onChange(of: showingAppPicker) {
+            print("[pushup] showingAppPicker -> \(showingAppPicker)")
+        }
+        .onChange(of: cameraModel.sessionRunning) {
+            if cameraModel.sessionRunning {
+                isOpeningRepTracker = false
+            }
+        }
+        .onChange(of: cameraModel.accessState) {
+            if cameraModel.accessState == .failed || cameraModel.accessState == .denied || cameraModel.accessState == .unavailable {
+                isOpeningRepTracker = false
+            }
         }
         .onChange(of: scenePhase) {
             if scenePhase == .active {
+                print("[pushup] scene became active")
                 refreshUnlockState()
+                refreshPermissionStatuses()
             }
         }
         .onReceive(timer) { _ in
@@ -539,51 +750,201 @@ struct ContentView: View {
         }
     }
 
-    private var onboardingView: some View {
+    @ViewBuilder
+    private func onboardingView(for stage: OnboardingStage) -> some View {
+        switch stage {
+        case .loading:
+            loadingView
+        case .appSelection:
+            initialAppSelectionView
+        case .notificationPermission:
+            notificationPermissionView
+        case .cameraPermission:
+            cameraPermissionView
+        case .introChallenge:
+            introChallengeView
+        }
+    }
+
+    private var loadingView: some View {
         VStack(spacing: 24) {
             Spacer()
 
-            VStack(alignment: .leading, spacing: 18) {
-                Text("Good choice.")
-                    .font(.system(size: 38, weight: .black, design: .rounded))
+            VStack(alignment: .leading, spacing: 20) {
+                Text("pushup")
+                    .font(.system(size: 44, weight: .black, design: .rounded))
                     .foregroundStyle(.white)
 
-                Text("You downloaded this app for a reason. Pick the apps you want to stop mindlessly opening, and the lock starts as soon as you finish choosing them.")
+                Text("Preparing your focus lock.")
                     .font(.system(.title3, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.82))
+                    .foregroundStyle(AppTheme.secondaryText)
 
-                quickButton(title: "Select Screen Time Apps") {
-                    presentInitialAppPicker()
-                }
-
-                if let appPickerError {
-                    Text(appPickerError)
-                        .font(.system(.footnote, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.72))
-                }
+                ProgressView()
+                    .tint(AppTheme.accent)
             }
-            .padding(24)
-            .background(.white.opacity(0.12))
-            .clipShape(RoundedRectangle(cornerRadius: 30, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .stroke(.white.opacity(0.12), lineWidth: 1)
-            )
+            .liquidGlassPanel(cornerRadius: 30, tint: AppTheme.panelTint)
 
             Spacer()
         }
         .padding(20)
     }
 
+    private var initialAppSelectionView: some View {
+        VStack(spacing: 24) {
+            Spacer()
+
+            VStack(alignment: .leading, spacing: 18) {
+                Text("Lock in your blockers")
+                    .font(.system(size: 36, weight: .black, design: .rounded))
+                    .foregroundStyle(.white)
+
+                Text("Choose the apps or websites you want protected. Once they are set, you will allow camera access and finish 5 real pushups to enter the app.")
+                    .font(.system(.title3, design: .rounded))
+                    .foregroundStyle(AppTheme.secondaryText)
+
+                quickButton(title: "Choose Protected Apps") {
+                    presentInitialAppPicker()
+                }
+                .disabled(isRequestingScreenTimePermission)
+
+                if let appPickerError {
+                    Text(appPickerError)
+                        .font(.system(.footnote, design: .rounded))
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
+            }
+            .liquidGlassPanel(cornerRadius: 30, tint: AppTheme.panelTint)
+
+            Spacer()
+        }
+        .padding(20)
+    }
+
+    private var notificationPermissionView: some View {
+        VStack(spacing: 24) {
+            Spacer()
+
+            VStack(alignment: .leading, spacing: 18) {
+                Text("Allow notifications")
+                    .font(.system(size: 36, weight: .black, design: .rounded))
+                    .foregroundStyle(.white)
+
+                Text(notificationPermissionDescription)
+                    .font(.system(.title3, design: .rounded))
+                    .foregroundStyle(AppTheme.secondaryText)
+
+                cameraPlaceholder(text: notificationPermissionStatusText)
+
+                quickButton(title: notificationPermissionActionTitle) {
+                    handleNotificationPermissionAction()
+                }
+                .disabled(isRequestingNotificationPermission)
+            }
+            .liquidGlassPanel(cornerRadius: 30, tint: AppTheme.panelTint)
+
+            Spacer()
+        }
+        .padding(20)
+    }
+
+    private var cameraPermissionView: some View {
+        VStack(spacing: 24) {
+            Spacer()
+
+            VStack(alignment: .leading, spacing: 18) {
+                Text("Allow the camera")
+                    .font(.system(size: 36, weight: .black, design: .rounded))
+                    .foregroundStyle(.white)
+
+                Text(cameraPermissionDescription)
+                    .font(.system(.title3, design: .rounded))
+                    .foregroundStyle(AppTheme.secondaryText)
+
+                cameraPlaceholder(text: cameraPermissionStatusText)
+
+                quickButton(title: cameraPermissionActionTitle) {
+                    handleCameraPermissionAction()
+                }
+            }
+            .liquidGlassPanel(cornerRadius: 30, tint: AppTheme.panelTint)
+
+            Spacer()
+        }
+        .padding(20)
+    }
+
+    private var introChallengeView: some View {
+        VStack(spacing: 24) {
+            Spacer(minLength: 0)
+
+            VStack(alignment: .leading, spacing: 18) {
+                Text("Earn your start")
+                    .font(.system(size: 36, weight: .black, design: .rounded))
+                    .foregroundStyle(.white)
+
+                Text("Do 5 full pushups to finish setup. The camera counts a rep only after a full down-and-up motion.")
+                    .font(.system(.title3, design: .rounded))
+                    .foregroundStyle(AppTheme.secondaryText)
+
+                cameraSurface
+
+                HStack {
+                    Text("\(onboardingCompletedReps)/\(introChallengeTarget) reps")
+                        .font(.system(.headline, design: .rounded))
+                        .foregroundStyle(.white)
+                    Spacer()
+                    Text(cameraModel.faceDetected ? "Face locked" : "Find your frame")
+                        .font(.system(.subheadline, design: .rounded))
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
+
+                ProgressView(value: Double(onboardingCompletedReps), total: Double(introChallengeTarget))
+                    .tint(AppTheme.accent)
+
+                HStack {
+                    Circle()
+                        .fill(cameraModel.faceDetected ? AppTheme.accentBright : Color.white.opacity(0.28))
+                        .frame(width: 10, height: 10)
+                    Text(cameraModel.statusText)
+                        .font(.system(.subheadline, design: .rounded))
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
+            }
+            .liquidGlassPanel(cornerRadius: 30, tint: AppTheme.panelTint)
+            .padding(20)
+            .onAppear {
+                startInitialPushupChallengeIfNeeded()
+            }
+
+            Spacer(minLength: 0)
+        }
+    }
+
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Earn your scroll")
-                .font(.system(size: 34, weight: .black, design: .rounded))
-                .foregroundStyle(.white)
+            HStack(alignment: .top) {
+                Text("Earn your scroll")
+                    .font(.system(size: 34, weight: .black, design: .rounded))
+                    .foregroundStyle(.white)
+
+                Spacer()
+
+                Button {
+                    showingPermissionStatusSheet = true
+                } label: {
+                    Image(systemName: "checklist")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(12)
+                        .liquidGlassButtonBackground(cornerRadius: 16, tint: AppTheme.softTint)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Permission status")
+            }
 
             Text("Real reps only. The front camera watches how close you come to the phone and counts a pushup after a full down-and-up motion.")
                 .font(.system(.body, design: .rounded))
-                .foregroundStyle(.white.opacity(0.8))
+                .foregroundStyle(AppTheme.secondaryText)
         }
     }
 
@@ -603,11 +964,9 @@ struct ContentView: View {
                 }
                 .font(.system(.subheadline, design: .rounded))
                 .fontWeight(.bold)
-                .foregroundStyle(.black)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(Color.white)
-                .clipShape(Capsule())
+                .foregroundStyle(.white)
+                .liquidGlassCapsuleButton(tint: AppTheme.softTint)
+                
             }
 
             HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -616,20 +975,20 @@ struct ContentView: View {
                     .foregroundStyle(.white)
                 Text("rep coins")
                     .font(.system(.title3, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(AppTheme.secondaryText)
             }
 
             if unlockIsActive {
                 Text("Unlocked for \(formattedUnlockTime)")
                     .font(.system(.subheadline, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.78))
+                    .foregroundStyle(AppTheme.secondaryText)
             }
 
             if showingSpendOptions {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Buy minutes")
                         .font(.system(.subheadline, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.78))
+                        .foregroundStyle(AppTheme.secondaryText)
 
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 76), spacing: 10)], spacing: 10) {
                         ForEach(bank.offers) { offer in
@@ -645,9 +1004,12 @@ struct ContentView: View {
                                 .fontWeight(.bold)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
-                                .foregroundStyle(bank.canRedeem(offer) ? Color.black : .white.opacity(0.45))
-                                .background(bank.canRedeem(offer) ? Color.white : Color.white.opacity(0.08))
-                                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                .foregroundStyle(bank.canRedeem(offer) ? Color.white : .white.opacity(0.45))
+                                .liquidGlassButtonBackground(
+                                    cornerRadius: 18,
+                                    tint: bank.canRedeem(offer) ? AppTheme.accent.opacity(0.32) : AppTheme.softTint,
+                                    interactive: bank.canRedeem(offer)
+                                )
                             }
                             .buttonStyle(.plain)
                             .disabled(!bank.canRedeem(offer))
@@ -659,67 +1021,43 @@ struct ContentView: View {
 
             HStack(spacing: 12) {
                 statPill(title: "Reps", value: "\(pushupCount)")
-                statPill(title: "Unlocked", value: "\(unlockedMinutes)m")
+                statPill(title: "Rotted", value: "\(unlockedMinutes)m")
                 statPill(title: "Spent", value: "\(spentReps)")
             }
         }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.white.opacity(0.12))
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .stroke(.white.opacity(0.12), lineWidth: 1)
-        )
+        .liquidGlassPanel(cornerRadius: 28, tint: AppTheme.panelTint)
     }
 
     private var cameraCard: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Text("Rep Tracker")
+                Text("Rep Arena")
                     .font(.system(.headline, design: .rounded))
                     .foregroundStyle(.white)
 
                 Spacer()
-
-                if isTrackingReps {
-                    Button("Stop") {
-                        isTrackingReps = false
-                        cameraModel.stop()
-                    }
-                    .font(.system(.subheadline, design: .rounded))
-                    .fontWeight(.bold)
-                    .foregroundStyle(.white)
-                }
             }
 
-            if isTrackingReps {
-                cameraSurface
+            Text(isTrackingReps ? "Arena open. Keep your form clean." : "Open a focused training popup with live cues and a square camera view.")
+                .font(.system(.subheadline, design: .rounded))
+                .foregroundStyle(AppTheme.secondaryText)
 
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack {
-                        Circle()
-                            .fill(cameraModel.faceDetected ? Color.green : Color.white.opacity(0.35))
-                            .frame(width: 10, height: 10)
-                        Text(cameraModel.statusText)
-                            .font(.system(.subheadline, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.86))
-                    }
+            quickButton(title: repTrackerButtonTitle) {
+                openRepTracker()
+            }
+            .disabled(isTrackingReps || isOpeningRepTracker)
 
-                    ProgressView(value: cameraModel.repProgress)
-                        .tint(.white)
-                }
-            } else {
-                quickButton(title: "Track Reps") {
-                    isTrackingReps = true
-                    cameraModel.start()
+            if isOpeningRepTracker {
+                HStack(spacing: 10) {
+                    ProgressView()
+                        .tint(AppTheme.accent)
+                    Text("Opening camera...")
+                        .font(.system(.subheadline, design: .rounded))
+                        .foregroundStyle(AppTheme.secondaryText)
                 }
             }
         }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.black.opacity(0.25))
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .liquidGlassPanel(cornerRadius: 28, tint: AppTheme.panelTint)
     }
 
     @ViewBuilder
@@ -735,8 +1073,7 @@ struct ContentView: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
-                        .background(.black.opacity(0.55))
-                        .clipShape(Capsule())
+                        .liquidGlassButtonBackground(cornerRadius: 999, tint: AppTheme.softTint)
                         .padding(14)
                 }
 
@@ -756,32 +1093,123 @@ struct ContentView: View {
 
     private var selectedAppsCard: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Button {
-                handleAppsButtonTapped()
-            } label: {
-                HStack {
-                    Text("Apps: \(selectedAppsCount)")
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Protected Apps")
                         .font(.system(.headline, design: .rounded))
-                        .fontWeight(.bold)
-                    Spacer()
-                    Image(systemName: "hourglass.circle")
-                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+
+                    Text("\(selectedAppsCount) protected items")
+                        .font(.system(.subheadline, design: .rounded))
+                        .foregroundStyle(AppTheme.secondaryText)
                 }
+
+                Spacer()
+
+                Button(isRequestingScreenTimePermission ? "Loading..." : "Edit") {
+                    handleAppsButtonTapped()
+                }
+                .font(.system(.subheadline, design: .rounded))
+                .fontWeight(.bold)
                 .foregroundStyle(.white)
-                .padding(18)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.white.opacity(0.10))
-                .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .liquidGlassCapsuleButton(tint: AppTheme.softTint)
+                .disabled(isRequestingScreenTimePermission)
             }
-            .buttonStyle(.plain)
+
+            HStack(spacing: 10) {
+                Image(systemName: "flame.fill")
+                    .foregroundStyle(AppTheme.gold)
+                Text("Need 5 pushups to edit your lock list.")
+                    .font(.system(.footnote, design: .rounded))
+                    .foregroundStyle(AppTheme.secondaryText)
+            }
 
             if let appPickerError {
                 Text(appPickerError)
                     .font(.system(.footnote, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.72))
+                    .foregroundStyle(AppTheme.secondaryText)
             }
         }
+        .liquidGlassPanel(cornerRadius: 28, tint: AppTheme.panelTint)
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var repTrackerOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.7)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    closeRepTracker()
+                }
+
+            VStack(alignment: .leading, spacing: 18) {
+                HStack {
+                    Text("Rep Arena")
+                        .font(.system(size: 30, weight: .black, design: .rounded))
+                        .foregroundStyle(.white)
+                    Spacer()
+                    Button("Close") {
+                        closeRepTracker()
+                    }
+                    .font(.system(.subheadline, design: .rounded))
+                    .fontWeight(.bold)
+                        .foregroundStyle(.white)
+                        .liquidGlassCapsuleButton(tint: .white.opacity(0.18))
+                }
+
+                trackerCameraSurface
+
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Circle()
+                            .fill(cameraModel.faceDetected ? AppTheme.accentBright : Color.white.opacity(0.35))
+                            .frame(width: 10, height: 10)
+                        Text(cameraModel.statusText)
+                            .font(.system(.subheadline, design: .rounded))
+                            .foregroundStyle(AppTheme.secondaryText)
+                    }
+
+                    ProgressView(value: cameraModel.repProgress)
+                        .tint(AppTheme.accent)
+
+                    HStack(spacing: 10) {
+                        trackerStatBadge(title: "Score", value: "\(pushupCount)")
+                        trackerStatBadge(title: "Coins", value: "\(bank.repCoins)")
+                    }
+                }
+            }
+            .liquidGlassPanel(cornerRadius: 28, tint: AppTheme.panelTint)
+            .padding(20)
+        }
+    }
+
+    private var appPickerSheet: some View {
+        NavigationStack {
+            FamilyActivityPicker(selection: $familyActivitySelection)
+                .navigationTitle("Choose Apps")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button("Done") {
+                            print("[pushup] app picker done tapped")
+                            showingAppPicker = false
+                        }
+                    }
+                }
+                .onAppear {
+                    print("[pushup] app picker sheet appeared")
+                }
+        }
+    }
+
+    private var repTrackerButtonTitle: String {
+        if isTrackingReps {
+            return "Tracker Open"
+        }
+        if isOpeningRepTracker {
+            return "Opening..."
+        }
+        return "Track Reps"
     }
 
     private var appChangeChallengeOverlay: some View {
@@ -790,15 +1218,15 @@ struct ContentView: View {
                 .ignoresSafeArea()
 
             VStack(alignment: .leading, spacing: 18) {
-                Text("Earn the change")
+                Text("Unlock Edit Mode")
                     .font(.system(size: 30, weight: .black, design: .rounded))
                     .foregroundStyle(.white)
 
-                Text("Do 5 pushups to change your protected apps.")
+                Text("Hit 5 clean pushups to earn one edit to your protected apps.")
                     .font(.system(.title3, design: .rounded))
                     .foregroundStyle(.white.opacity(0.8))
 
-                cameraSurface
+                trackerCameraSurface
 
                 HStack {
                     Text("\(challengeCompletedReps)/\(appChangeChallengeTarget) reps")
@@ -811,29 +1239,68 @@ struct ContentView: View {
                     .font(.system(.subheadline, design: .rounded))
                     .fontWeight(.bold)
                     .foregroundStyle(.white)
+                    .liquidGlassCapsuleButton(tint: .white.opacity(0.18))
                 }
 
                 ProgressView(value: Double(challengeCompletedReps), total: Double(appChangeChallengeTarget))
-                    .tint(.white)
+                    .tint(AppTheme.accent)
 
                 HStack {
                     Circle()
-                        .fill(cameraModel.faceDetected ? Color.green : Color.white.opacity(0.35))
+                        .fill(cameraModel.faceDetected ? AppTheme.accentBright : Color.white.opacity(0.35))
                         .frame(width: 10, height: 10)
                     Text(cameraModel.statusText)
                         .font(.system(.subheadline, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.86))
+                        .foregroundStyle(AppTheme.secondaryText)
                 }
             }
-            .padding(22)
-            .background(Color.black.opacity(0.85))
-            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 28, style: .continuous)
-                    .stroke(.white.opacity(0.10), lineWidth: 1)
-            )
+            .liquidGlassPanel(cornerRadius: 28, tint: AppTheme.panelTint)
             .padding(20)
         }
+    }
+
+    private var permissionStatusSheet: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 18) {
+                permissionRow(
+                    title: "Screen Time",
+                    status: screenTimePermissionLabel,
+                    isEnabled: screenTimePermissionGranted,
+                    detail: "Required to choose and shield apps."
+                )
+                permissionRow(
+                    title: "Notifications",
+                    status: notificationPermissionLabel,
+                    isEnabled: notificationsAreEnabled,
+                    detail: "Used for unlock ending reminders."
+                )
+                permissionRow(
+                    title: "Camera",
+                    status: cameraPermissionLabel,
+                    isEnabled: cameraPermissionGranted,
+                    detail: "Used to count real pushup reps."
+                )
+
+                Spacer(minLength: 0)
+
+                quickButton(title: "Refresh", isPrimary: false) {
+                    refreshPermissionStatuses()
+                }
+
+                if !notificationsAreEnabled || !cameraPermissionGranted {
+                    quickButton(title: "Open Settings") {
+                        openAppSettings()
+                    }
+                }
+            }
+            .padding(20)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(themeBackground)
+            .navigationTitle("Permissions")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
     }
 
     private var formattedUnlockTime: String {
@@ -847,16 +1314,13 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title.uppercased())
                 .font(.system(size: 11, weight: .bold, design: .rounded))
-                .foregroundStyle(.white.opacity(0.55))
+                .foregroundStyle(AppTheme.secondaryText)
             Text(value)
                 .font(.system(.title3, design: .rounded))
                 .fontWeight(.heavy)
                 .foregroundStyle(.white)
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.black.opacity(0.18))
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .liquidGlassPanel(cornerRadius: 18, tint: AppTheme.softTint, padding: 14)
     }
 
     private func quickButton(title: String, isPrimary: Bool = true, action: @escaping () -> Void) -> some View {
@@ -866,24 +1330,147 @@ struct ContentView: View {
                 .fontWeight(.bold)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
-                .foregroundStyle(isPrimary ? Color.black : .white)
-                .background(isPrimary ? Color.white : Color.white.opacity(0.10))
-                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .foregroundStyle(.white)
+                .liquidGlassButtonBackground(
+                    cornerRadius: 20,
+                    tint: isPrimary ? AppTheme.accent.opacity(0.32) : AppTheme.softTint
+                )
+                .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         }
         .buttonStyle(.plain)
+        .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+
+    private func trackerStatBadge(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title.uppercased())
+                .font(.system(size: 10, weight: .bold, design: .rounded))
+                .foregroundStyle(AppTheme.secondaryText)
+            Text(value)
+                .font(.system(.headline, design: .rounded))
+                .fontWeight(.heavy)
+                .foregroundStyle(.white)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .liquidGlassButtonBackground(cornerRadius: 16, tint: AppTheme.softTint, interactive: false)
+    }
+
+    private func permissionRow(title: String, status: String, isEnabled: Bool, detail: String) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            Image(systemName: isEnabled ? "checkmark.circle.fill" : "xmark.circle.fill")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(isEnabled ? AppTheme.accentBright : Color.red.opacity(0.88))
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(title)
+                        .font(.system(.headline, design: .rounded))
+                        .foregroundStyle(.white)
+                    Spacer()
+                    Text(status)
+                        .font(.system(.subheadline, design: .rounded))
+                        .foregroundStyle(AppTheme.secondaryText)
+                }
+
+                Text(detail)
+                    .font(.system(.footnote, design: .rounded))
+                    .foregroundStyle(AppTheme.secondaryText)
+            }
+        }
+        .liquidGlassPanel(cornerRadius: 24, tint: AppTheme.panelTint, padding: 16)
     }
 
     private func cameraPlaceholder(text: String) -> some View {
         RoundedRectangle(cornerRadius: 24, style: .continuous)
-            .fill(Color.white.opacity(0.08))
+            .fill(AppTheme.softTint)
             .frame(height: 260)
             .overlay {
                 Text(text)
                     .font(.system(.body, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.72))
+                    .foregroundStyle(AppTheme.secondaryText)
                     .padding()
                     .multilineTextAlignment(.center)
             }
+    }
+
+    private var trackerCameraSurface: some View {
+        ZStack(alignment: .top) {
+            Group {
+                switch cameraModel.accessState {
+                case .granted, .idle:
+                    CameraPreviewView(session: cameraModel.session)
+                case .requesting:
+                    cameraSquarePlaceholder(text: "Requesting camera access...")
+                case .denied:
+                    cameraSquarePlaceholder(text: "Camera access is off. Enable it in Settings.")
+                case .unavailable:
+                    cameraSquarePlaceholder(text: "This device does not have a usable front camera.")
+                case .failed:
+                    cameraSquarePlaceholder(text: "The camera session could not be started.")
+                }
+            }
+            .frame(width: 300, height: 300)
+            .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+
+            VStack(spacing: 10) {
+                Text(trackerCueText)
+                    .font(.system(size: 30, weight: .black, design: .rounded))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 10)
+                    .liquidGlassButtonBackground(cornerRadius: 18, tint: AppTheme.accent.opacity(0.34), interactive: false)
+
+                Text(cameraModel.sessionRunning ? "Stay centered and follow the cue." : "Camera warming up.")
+                    .font(.system(.footnote, design: .rounded))
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .liquidGlassButtonBackground(cornerRadius: 16, tint: AppTheme.softTint, interactive: false)
+            }
+            .padding(.top, 14)
+
+            VStack {
+                Spacer()
+                HStack {
+                    Text(cameraModel.sessionRunning ? "LIVE" : "STARTING")
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .liquidGlassButtonBackground(cornerRadius: 999, tint: AppTheme.softTint, interactive: false)
+                    Spacer()
+                }
+                .padding(14)
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private func cameraSquarePlaceholder(text: String) -> some View {
+        RoundedRectangle(cornerRadius: 28, style: .continuous)
+            .fill(AppTheme.softTint)
+            .overlay {
+                Text(text)
+                    .font(.system(.body, design: .rounded))
+                    .foregroundStyle(AppTheme.secondaryText)
+                    .padding()
+                    .multilineTextAlignment(.center)
+            }
+    }
+
+    private var trackerCueText: String {
+        let text = cameraModel.statusText.lowercased()
+        if text.contains("lower") || text.contains("down") {
+            return "DOWN"
+        }
+        if text.contains("push") || text.contains("higher") || text.contains("rep done") || text.contains("top") {
+            return "UP"
+        }
+        if text.contains("frame") {
+            return "LOCK IN"
+        }
+        return "READY"
     }
 
     private func redeem(_ offer: RepBank.Offer) {
@@ -898,17 +1485,33 @@ struct ContentView: View {
     }
 
     private func presentAppPicker() {
-        Task {
-            do {
-                try await AuthorizationCenter.shared.requestAuthorization(for: .individual)
+        print("[pushup] presentAppPicker called; selectedAppsCount=\(selectedAppsCount)")
+        isTrackingReps = false
+        showingAppChangeChallenge = false
+        cameraModel.stop {
+            Task {
+                try? await Task.sleep(for: .milliseconds(350))
                 await MainActor.run {
-                    appPickerError = nil
-                    showingAppPicker = true
+                    isRequestingScreenTimePermission = true
+                    print("[pushup] requesting Screen Time authorization")
                 }
-            } catch {
-                await MainActor.run {
-                    let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-                    appPickerError = "Screen Time unavailable: \(message)"
+                do {
+                    try await AuthorizationCenter.shared.requestAuthorization(for: .individual)
+                    await MainActor.run {
+                        screenTimeAuthorizationStatus = AuthorizationCenter.shared.authorizationStatus
+                        appPickerError = nil
+                        isRequestingScreenTimePermission = false
+                        print("[pushup] Screen Time authorization success; status=\(String(describing: screenTimeAuthorizationStatus))")
+                        showingAppPicker = true
+                    }
+                } catch {
+                    await MainActor.run {
+                        screenTimeAuthorizationStatus = AuthorizationCenter.shared.authorizationStatus
+                        isRequestingScreenTimePermission = false
+                        let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                        appPickerError = "Screen Time unavailable: \(message)"
+                        print("[pushup] Screen Time authorization failed: \(message)")
+                    }
                 }
             }
         }
@@ -919,12 +1522,33 @@ struct ContentView: View {
     }
 
     private func handleAppsButtonTapped() {
+        print("[pushup] selected apps button tapped")
+        appPickerError = nil
         if selectedAppsCount == 0 {
-            presentInitialAppPicker()
+            presentAppPicker()
             return
         }
-
         beginAppChangeChallenge()
+    }
+
+    private func openRepTracker() {
+        guard !isTrackingReps, !isOpeningRepTracker else { return }
+        print("[pushup] opening rep tracker")
+        isOpeningRepTracker = true
+        isTrackingReps = true
+        cameraModel.start()
+
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(900))
+            isOpeningRepTracker = false
+        }
+    }
+
+    private func closeRepTracker() {
+        print("[pushup] closing rep tracker")
+        isOpeningRepTracker = false
+        isTrackingReps = false
+        cameraModel.stop()
     }
 
     private func loadSavedSelection() {
@@ -939,6 +1563,17 @@ struct ContentView: View {
         familyActivitySelection = selection
         hasLoadedSelection = true
         applyShields()
+    }
+
+    private func startInitialLoad() {
+        print("[pushup] initial load started")
+        loadSavedSelection()
+        refreshPermissionStatuses()
+
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(1.1))
+            showingLaunchScreen = false
+        }
     }
 
     private func persistSelection() {
@@ -967,8 +1602,132 @@ struct ContentView: View {
         }
     }
 
+    private var cameraPermissionDescription: String {
+        switch cameraModel.accessState {
+        case .denied:
+            return "Turn camera access on in Settings to continue."
+        case .unavailable:
+            return "A front camera is required to verify reps."
+        case .failed:
+            return "Try camera access again, then finish 5 pushups."
+        case .requesting:
+            return "Approve camera access when iOS asks."
+        case .idle, .granted:
+            return "Allow camera access to verify your first 5 pushups."
+        }
+    }
+
+    private var notificationPermissionDescription: String {
+        switch notificationAuthorizationStatus {
+        case .denied:
+            return "Turn notifications on in Settings so the app can warn you before your unlock ends."
+        case .authorized, .provisional, .ephemeral:
+            return "Notifications are ready. Continue if you already allowed them."
+        case .notDetermined:
+            return "Allow notifications so you get a warning before protected apps lock again."
+        @unknown default:
+            return "Check notification access to continue."
+        }
+    }
+
+    private var notificationPermissionStatusText: String {
+        switch notificationAuthorizationStatus {
+        case .denied:
+            return "Notifications are off."
+        case .authorized:
+            return "Notifications ready."
+        case .provisional:
+            return "Notifications are provisionally allowed."
+        case .ephemeral:
+            return "Notifications are temporarily allowed."
+        case .notDetermined:
+            return "Notification permission not granted."
+        @unknown default:
+            return "Notification status unknown."
+        }
+    }
+
+    private var notificationPermissionActionTitle: String {
+        switch notificationAuthorizationStatus {
+        case .denied:
+            return "Open Settings"
+        case .authorized, .provisional, .ephemeral:
+            return "Continue"
+        case .notDetermined:
+            return isRequestingNotificationPermission ? "Waiting for Permission" : "Allow Notifications"
+        @unknown default:
+            return "Check Notifications"
+        }
+    }
+
+    private var cameraPermissionStatusText: String {
+        switch cameraModel.accessState {
+        case .denied:
+            return "Camera access is off."
+        case .unavailable:
+            return "No usable front camera."
+        case .failed:
+            return "Camera could not start."
+        case .requesting:
+            return "Waiting for permission..."
+        case .idle:
+            return "Camera permission not granted."
+        case .granted:
+            return "Camera ready."
+        }
+    }
+
+    private var cameraPermissionActionTitle: String {
+        switch cameraModel.accessState {
+        case .denied:
+            return "Open Settings"
+        case .unavailable:
+            return "Retry Camera Check"
+        case .failed:
+            return "Try Camera Again"
+        case .requesting:
+            return "Waiting for Permission"
+        case .idle, .granted:
+            return "Allow Camera"
+        }
+    }
+
+    private func handleCameraPermissionAction() {
+        switch cameraModel.accessState {
+        case .denied:
+            openAppSettings()
+        case .requesting:
+            break
+        case .unavailable, .failed, .idle, .granted:
+            cameraModel.requestAccessIfNeeded { granted in
+                if granted {
+                    startInitialPushupChallengeIfNeeded()
+                }
+            }
+        }
+    }
+
     private func requestNotificationAuthorization() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in }
+        isRequestingNotificationPermission = true
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { _, _ in
+            Task { @MainActor in
+                isRequestingNotificationPermission = false
+                await refreshNotificationAuthorizationStatus()
+            }
+        }
+    }
+
+    private func handleNotificationPermissionAction() {
+        switch notificationAuthorizationStatus {
+        case .denied:
+            openAppSettings()
+        case .notDetermined:
+            requestNotificationAuthorization()
+        case .authorized, .provisional, .ephemeral:
+            refreshPermissionStatuses()
+        @unknown default:
+            refreshPermissionStatuses()
+        }
     }
 
     private func scheduleUnlockNotifications(for endDate: Date) {
@@ -1007,21 +1766,234 @@ struct ContentView: View {
     }
 
     private func beginAppChangeChallenge() {
+        print("[pushup] starting app edit challenge")
         challengeBaselineReps = pushupCount
         showingAppChangeChallenge = true
+        isOpeningRepTracker = false
         isTrackingReps = false
         cameraModel.start()
     }
 
     private func cancelAppChangeChallenge() {
+        print("[pushup] cancel app edit challenge")
         showingAppChangeChallenge = false
         cameraModel.stop()
     }
 
     private func completeAppChangeChallenge() {
+        print("[pushup] completed app edit challenge")
         showingAppChangeChallenge = false
         cameraModel.stop()
         presentAppPicker()
+    }
+
+    private func startInitialPushupChallengeIfNeeded() {
+        guard !hasCompletedInitialSetup else { return }
+        if !hasPreparedOnboardingChallenge {
+            onboardingBaselineReps = pushupCount
+            hasPreparedOnboardingChallenge = true
+        }
+        cameraModel.start()
+    }
+
+    private func completeInitialSetup() {
+        hasCompletedInitialSetup = true
+        hasPreparedOnboardingChallenge = false
+        cameraModel.stop()
+    }
+
+    private func openAppSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
+    }
+
+    private func refreshPermissionStatuses() {
+        screenTimeAuthorizationStatus = AuthorizationCenter.shared.authorizationStatus
+        print("[pushup] refresh permissions; screenTimeStatus=\(String(describing: screenTimeAuthorizationStatus))")
+        cameraModel.refreshAuthorizationStatus()
+
+        Task { @MainActor in
+            await refreshNotificationAuthorizationStatus()
+        }
+    }
+
+    @MainActor
+    private func refreshNotificationAuthorizationStatus() async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        notificationAuthorizationStatus = settings.authorizationStatus
+        print("[pushup] notification status -> \(notificationAuthorizationStatus.rawValue)")
+    }
+
+    private var notificationsAreEnabled: Bool {
+        switch notificationAuthorizationStatus {
+        case .authorized, .provisional, .ephemeral:
+            return true
+        case .denied, .notDetermined:
+            return false
+        @unknown default:
+            return false
+        }
+    }
+
+    private var screenTimePermissionGranted: Bool {
+        switch screenTimeAuthorizationStatus {
+        case .approved, .approvedWithDataAccess:
+            return true
+        case .denied, .notDetermined:
+            return false
+        @unknown default:
+            return false
+        }
+    }
+
+    private var cameraPermissionGranted: Bool {
+        if case .granted = cameraModel.accessState {
+            return true
+        }
+        return false
+    }
+
+    private var screenTimePermissionLabel: String {
+        switch screenTimeAuthorizationStatus {
+        case .approved:
+            return "Allowed"
+        case .approvedWithDataAccess:
+            return "Allowed + Data"
+        case .denied:
+            return "Denied"
+        case .notDetermined:
+            return "Not Asked"
+        @unknown default:
+            return "Unknown"
+        }
+    }
+
+    private var notificationPermissionLabel: String {
+        switch notificationAuthorizationStatus {
+        case .authorized:
+            return "Allowed"
+        case .provisional:
+            return "Provisional"
+        case .ephemeral:
+            return "Ephemeral"
+        case .denied:
+            return "Denied"
+        case .notDetermined:
+            return "Not Asked"
+        @unknown default:
+            return "Unknown"
+        }
+    }
+
+    private var cameraPermissionLabel: String {
+        switch cameraModel.accessState {
+        case .granted:
+            return "Allowed"
+        case .requesting:
+            return "Waiting"
+        case .denied:
+            return "Denied"
+        case .idle:
+            return "Not Asked"
+        case .unavailable:
+            return "Unavailable"
+        case .failed:
+            return "Failed"
+        }
+    }
+
+    private var themeBackground: some View {
+        ZStack {
+            LinearGradient(
+                colors: [AppTheme.backgroundTop, AppTheme.backgroundBottom],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            Circle()
+                .fill(AppTheme.accent.opacity(0.22))
+                .frame(width: 360, height: 360)
+                .blur(radius: 70)
+                .offset(x: 140, y: -260)
+
+            Circle()
+                .fill(AppTheme.accentBright.opacity(0.18))
+                .frame(width: 280, height: 280)
+                .blur(radius: 60)
+                .offset(x: -150, y: 260)
+
+            Rectangle()
+                .fill(.black.opacity(0.18))
+        }
+        .ignoresSafeArea()
+    }
+}
+
+private enum AppTheme {
+    static let backgroundTop = Color(red: 0.05, green: 0.08, blue: 0.13)
+    static let backgroundBottom = Color(red: 0.01, green: 0.03, blue: 0.07)
+    static let accent = Color(red: 0.34, green: 0.72, blue: 0.82)
+    static let accentBright = Color(red: 0.56, green: 0.86, blue: 0.87)
+    static let gold = Color(red: 0.96, green: 0.76, blue: 0.30)
+    static let panelTint = Color.white.opacity(0.08)
+    static let softTint = Color.white.opacity(0.10)
+    static let secondaryText = Color.white.opacity(0.74)
+}
+
+private struct LiquidGlassPanelModifier: ViewModifier {
+    let cornerRadius: CGFloat
+    let tint: Color
+    let padding: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .padding(padding)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .modifier(LiquidGlassBackgroundModifier(cornerRadius: cornerRadius, tint: tint, interactive: false))
+    }
+}
+
+private struct LiquidGlassBackgroundModifier: ViewModifier {
+    let cornerRadius: CGFloat
+    let tint: Color
+    let interactive: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            let glass = interactive ? Glass.regular.tint(tint).interactive() : Glass.regular.tint(tint)
+            content
+                .glassEffect(glass, in: .rect(cornerRadius: cornerRadius))
+        } else {
+            content
+                .background(tint)
+                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .stroke(.white.opacity(0.10), lineWidth: 1)
+                }
+        }
+    }
+}
+
+private extension View {
+    func liquidGlassPanel(cornerRadius: CGFloat, tint: Color, padding: CGFloat = 20) -> some View {
+        modifier(LiquidGlassPanelModifier(cornerRadius: cornerRadius, tint: tint, padding: padding))
+    }
+
+    func liquidGlassButtonBackground(
+        cornerRadius: CGFloat,
+        tint: Color,
+        interactive: Bool = true
+    ) -> some View {
+        modifier(LiquidGlassBackgroundModifier(cornerRadius: cornerRadius, tint: tint, interactive: interactive))
+    }
+
+    func liquidGlassCapsuleButton(tint: Color) -> some View {
+        self
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .modifier(LiquidGlassBackgroundModifier(cornerRadius: 999, tint: tint, interactive: true))
     }
 }
 
