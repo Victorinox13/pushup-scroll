@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDisplayName</key>
+    <string>PushToUnrot</string>
+    <key>GADApplicationIdentifier</key>
+    <string>ca-app-pub-9559509402865286~2960665866</string>
+    <key>NSCameraUsageDescription</key>
+    <string>pushup-scroll uses the camera to verify your pushup movement and count completed reps before unlocking time for your selected apps.</string>
+    <key>NSMotionUsageDescription</key>
+    <string>pushup-scroll uses motion data to confirm your phone is placed flat on the ground before a pushup session begins.</string>
+    <key>UIApplicationSupportsIndirectInputEvents</key>
+    <true/>
+    <key>UILaunchScreen</key>
+    <dict/>
+    <key>UIStatusBarStyle</key>
+    <string>UIStatusBarStyleDefault</string>
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+    </array>
+    <key>UISupportedInterfaceOrientations~ipad</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationPortraitUpsideDown</string>
+    </array>
+</dict>
+</plist>
