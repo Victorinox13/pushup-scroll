@@ -6,6 +6,13 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		863F36B92F8E6AAE009D1320 /* GoogleMobileAds in Frameworks */ = {isa = PBXBuildFile; productRef = 863F36B82F8E6AAE009D1320 /* GoogleMobileAds */; };
+		A10000012F90000100AA0001 /* pushupDeviceActivityMonitor.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A10000022F90000100AA0001 /* pushupDeviceActivityMonitor.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		B10000012F90000100BB0001 /* pushupShieldConfiguration.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = B10000022F90000100BB0001 /* pushupShieldConfiguration.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		C10000012F90000100CC0001 /* pushupShieldAction.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = C10000022F90000100CC0001 /* pushupShieldAction.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		869B50CE2F8AE63C002AD9FF /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -21,12 +28,52 @@
 			remoteGlobalIDString = 869B50BF2F8AE63B002AD9FF;
 			remoteInfo = pushup;
 		};
+		A100000C2F90000100AA0001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 869B50B82F8AE63B002AD9FF /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A10000052F90000100AA0001;
+			remoteInfo = pushupDeviceActivityMonitor;
+		};
+		B100000C2F90000100BB0001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 869B50B82F8AE63B002AD9FF /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B10000052F90000100BB0001;
+			remoteInfo = pushupShieldConfiguration;
+		};
+		C100000C2F90000100CC0001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 869B50B82F8AE63B002AD9FF /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C10000052F90000100CC0001;
+			remoteInfo = pushupShieldAction;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A10000042F90000100AA0001 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A10000012F90000100AA0001 /* pushupDeviceActivityMonitor.appex in Embed App Extensions */,
+				B10000012F90000100BB0001 /* pushupShieldConfiguration.appex in Embed App Extensions */,
+				C10000012F90000100CC0001 /* pushupShieldAction.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		869B50C02F8AE63B002AD9FF /* pushup.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = pushup.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		869B50CD2F8AE63C002AD9FF /* pushupTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = pushupTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		869B50D72F8AE63C002AD9FF /* pushupUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = pushupUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000022F90000100AA0001 /* pushupDeviceActivityMonitor.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = pushupDeviceActivityMonitor.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		B10000022F90000100BB0001 /* pushupShieldConfiguration.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = pushupShieldConfiguration.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		C10000022F90000100CC0001 /* pushupShieldAction.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = pushupShieldAction.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -45,6 +92,21 @@
 			path = pushupUITests;
 			sourceTree = "<group>";
 		};
+		A10000032F90000100AA0001 /* pushupDeviceActivityMonitor */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = pushupDeviceActivityMonitor;
+			sourceTree = "<group>";
+		};
+		B10000032F90000100BB0001 /* pushupShieldConfiguration */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = pushupShieldConfiguration;
+			sourceTree = "<group>";
+		};
+		C10000032F90000100CC0001 /* pushupShieldAction */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = pushupShieldAction;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -52,6 +114,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				863F36B92F8E6AAE009D1320 /* GoogleMobileAds in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -69,15 +132,47 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A10000062F90000100AA0001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B10000062F90000100BB0001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C10000062F90000100CC0001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		863F36B72F8E6AAE009D1320 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		869B50B72F8AE63B002AD9FF = {
 			isa = PBXGroup;
 			children = (
 				869B50C22F8AE63B002AD9FF /* pushup */,
 				869B50D02F8AE63C002AD9FF /* pushupTests */,
 				869B50DA2F8AE63C002AD9FF /* pushupUITests */,
+				A10000032F90000100AA0001 /* pushupDeviceActivityMonitor */,
+				B10000032F90000100BB0001 /* pushupShieldConfiguration */,
+				C10000032F90000100CC0001 /* pushupShieldAction */,
+				863F36B72F8E6AAE009D1320 /* Frameworks */,
 				869B50C12F8AE63B002AD9FF /* Products */,
 			);
 			sourceTree = "<group>";
@@ -88,6 +183,9 @@
 				869B50C02F8AE63B002AD9FF /* pushup.app */,
 				869B50CD2F8AE63C002AD9FF /* pushupTests.xctest */,
 				869B50D72F8AE63C002AD9FF /* pushupUITests.xctest */,
+				A10000022F90000100AA0001 /* pushupDeviceActivityMonitor.appex */,
+				B10000022F90000100BB0001 /* pushupShieldConfiguration.appex */,
+				C10000022F90000100CC0001 /* pushupShieldAction.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -102,16 +200,21 @@
 				869B50BC2F8AE63B002AD9FF /* Sources */,
 				869B50BD2F8AE63B002AD9FF /* Frameworks */,
 				869B50BE2F8AE63B002AD9FF /* Resources */,
+				A10000042F90000100AA0001 /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				A100000D2F90000100AA0001 /* PBXTargetDependency */,
+				B100000D2F90000100BB0001 /* PBXTargetDependency */,
+				C100000D2F90000100CC0001 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				869B50C22F8AE63B002AD9FF /* pushup */,
 			);
 			name = pushup;
 			packageProductDependencies = (
+				863F36B82F8E6AAE009D1320 /* GoogleMobileAds */,
 			);
 			productName = pushup;
 			productReference = 869B50C02F8AE63B002AD9FF /* pushup.app */;
@@ -163,6 +266,72 @@
 			productReference = 869B50D72F8AE63C002AD9FF /* pushupUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		A10000052F90000100AA0001 /* pushupDeviceActivityMonitor */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A100000B2F90000100AA0001 /* Build configuration list for PBXNativeTarget "pushupDeviceActivityMonitor" */;
+			buildPhases = (
+				A10000082F90000100AA0001 /* Sources */,
+				A10000062F90000100AA0001 /* Frameworks */,
+				A10000072F90000100AA0001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				A10000032F90000100AA0001 /* pushupDeviceActivityMonitor */,
+			);
+			name = pushupDeviceActivityMonitor;
+			packageProductDependencies = (
+			);
+			productName = pushupDeviceActivityMonitor;
+			productReference = A10000022F90000100AA0001 /* pushupDeviceActivityMonitor.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		B10000052F90000100BB0001 /* pushupShieldConfiguration */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = B100000B2F90000100BB0001 /* Build configuration list for PBXNativeTarget "pushupShieldConfiguration" */;
+			buildPhases = (
+				B10000082F90000100BB0001 /* Sources */,
+				B10000062F90000100BB0001 /* Frameworks */,
+				B10000072F90000100BB0001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				B10000032F90000100BB0001 /* pushupShieldConfiguration */,
+			);
+			name = pushupShieldConfiguration;
+			packageProductDependencies = (
+			);
+			productName = pushupShieldConfiguration;
+			productReference = B10000022F90000100BB0001 /* pushupShieldConfiguration.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		C10000052F90000100CC0001 /* pushupShieldAction */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C100000B2F90000100CC0001 /* Build configuration list for PBXNativeTarget "pushupShieldAction" */;
+			buildPhases = (
+				C10000082F90000100CC0001 /* Sources */,
+				C10000062F90000100CC0001 /* Frameworks */,
+				C10000072F90000100CC0001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				C10000032F90000100CC0001 /* pushupShieldAction */,
+			);
+			name = pushupShieldAction;
+			packageProductDependencies = (
+			);
+			productName = pushupShieldAction;
+			productReference = C10000022F90000100CC0001 /* pushupShieldAction.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -195,6 +364,9 @@
 			);
 			mainGroup = 869B50B72F8AE63B002AD9FF;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				863F36B62F8E6A8F009D1320 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 869B50C12F8AE63B002AD9FF /* Products */;
 			projectDirPath = "";
@@ -203,6 +375,9 @@
 				869B50BF2F8AE63B002AD9FF /* pushup */,
 				869B50CC2F8AE63C002AD9FF /* pushupTests */,
 				869B50D62F8AE63C002AD9FF /* pushupUITests */,
+				A10000052F90000100AA0001 /* pushupDeviceActivityMonitor */,
+				B10000052F90000100BB0001 /* pushupShieldConfiguration */,
+				C10000052F90000100CC0001 /* pushupShieldAction */,
 			);
 		};
 /* End PBXProject section */
@@ -223,6 +398,27 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		869B50D52F8AE63C002AD9FF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A10000072F90000100AA0001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B10000072F90000100BB0001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C10000072F90000100CC0001 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -253,6 +449,27 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A10000082F90000100AA0001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B10000082F90000100BB0001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C10000082F90000100CC0001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -265,6 +482,21 @@
 			isa = PBXTargetDependency;
 			target = 869B50BF2F8AE63B002AD9FF /* pushup */;
 			targetProxy = 869B50D82F8AE63C002AD9FF /* PBXContainerItemProxy */;
+		};
+		A100000D2F90000100AA0001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A10000052F90000100AA0001 /* pushupDeviceActivityMonitor */;
+			targetProxy = A100000C2F90000100AA0001 /* PBXContainerItemProxy */;
+		};
+		B100000D2F90000100BB0001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B10000052F90000100BB0001 /* pushupShieldConfiguration */;
+			targetProxy = B100000C2F90000100BB0001 /* PBXContainerItemProxy */;
+		};
+		C100000D2F90000100CC0001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C10000052F90000100CC0001 /* pushupShieldAction */;
+			targetProxy = C100000C2F90000100CC0001 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -390,7 +622,9 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = pushup/pushup.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 3N8TA3B8K6;
@@ -399,34 +633,33 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSCameraUsageDescription = "The camera is used to track your pushup reps.";
-				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
-				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
-				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
-				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
-				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
-				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
-				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
-				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
+				INFOPLIST_FILE = Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = PushToUnrot;
+				INFOPLIST_KEY_NSCameraUsageDescription = "pushup-scroll uses the camera to verify your pushup movement and count completed reps before unlocking time for your selected apps.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "pushup-scroll uses motion data to confirm your phone is placed flat on the ground before a pushup session begins.";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIStatusBarStyle = "";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.4;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = deleeck.pushup;
+				MARKETING_VERSION = 1.2;
+				PRODUCT_BUNDLE_IDENTIFIER = deleeck.pushtounrot;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TARGETED_DEVICE_FAMILY = 1;
 				XROS_DEPLOYMENT_TARGET = 26.4;
 			};
 			name = Debug;
@@ -436,7 +669,9 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = pushup/pushup.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 3N8TA3B8K6;
@@ -445,34 +680,33 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_NSCameraUsageDescription = "The camera is used to track your pushup reps.";
-				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
-				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
-				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
-				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
-				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
-				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
-				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
-				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
+				INFOPLIST_FILE = Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = PushToUnrot;
+				INFOPLIST_KEY_NSCameraUsageDescription = "pushup-scroll uses the camera to verify your pushup movement and count completed reps before unlocking time for your selected apps.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "pushup-scroll uses motion data to confirm your phone is placed flat on the ground before a pushup session begins.";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UIStatusBarStyle = "";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.4;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = deleeck.pushup;
+				MARKETING_VERSION = 1.2;
+				PRODUCT_BUNDLE_IDENTIFIER = deleeck.pushtounrot;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator macosx xros xrsimulator";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2,7";
+				TARGETED_DEVICE_FAMILY = 1;
 				XROS_DEPLOYMENT_TARGET = 26.4;
 			};
 			name = Release;
@@ -579,6 +813,206 @@
 			};
 			name = Release;
 		};
+		A10000092F90000100AA0001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = pushupDeviceActivityMonitor/pushupDeviceActivityMonitor.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = 3N8TA3B8K6;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = pushupDeviceActivityMonitorInfo.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.2;
+				PRODUCT_BUNDLE_IDENTIFIER = deleeck.pushtounrot.DeviceActivityMonitor;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = auto;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				XROS_DEPLOYMENT_TARGET = 26.4;
+			};
+			name = Debug;
+		};
+		A100000A2F90000100AA0001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = pushupDeviceActivityMonitor/pushupDeviceActivityMonitor.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = 3N8TA3B8K6;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = pushupDeviceActivityMonitorInfo.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.2;
+				PRODUCT_BUNDLE_IDENTIFIER = deleeck.pushtounrot.DeviceActivityMonitor;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = auto;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				XROS_DEPLOYMENT_TARGET = 26.4;
+			};
+			name = Release;
+		};
+		B10000092F90000100BB0001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = pushupShieldConfiguration.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = 3N8TA3B8K6;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = pushupShieldConfigurationInfo.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.2;
+				PRODUCT_BUNDLE_IDENTIFIER = deleeck.pushtounrot.ShieldConfiguration;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				XROS_DEPLOYMENT_TARGET = 26.4;
+			};
+			name = Debug;
+		};
+		B100000A2F90000100BB0001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = pushupShieldConfiguration.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = 3N8TA3B8K6;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = pushupShieldConfigurationInfo.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.2;
+				PRODUCT_BUNDLE_IDENTIFIER = deleeck.pushtounrot.ShieldConfiguration;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				XROS_DEPLOYMENT_TARGET = 26.4;
+			};
+			name = Release;
+		};
+		C10000092F90000100CC0001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = pushupShieldAction.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = 3N8TA3B8K6;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = pushupShieldActionInfo.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.2;
+				PRODUCT_BUNDLE_IDENTIFIER = deleeck.pushtounrot.ShieldAction;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				XROS_DEPLOYMENT_TARGET = 26.4;
+			};
+			name = Debug;
+		};
+		C100000A2F90000100CC0001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = pushupShieldAction.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = 3N8TA3B8K6;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = pushupShieldActionInfo.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0.2;
+				PRODUCT_BUNDLE_IDENTIFIER = deleeck.pushtounrot.ShieldAction;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				XROS_DEPLOYMENT_TARGET = 26.4;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -618,7 +1052,53 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		A100000B2F90000100AA0001 /* Build configuration list for PBXNativeTarget "pushupDeviceActivityMonitor" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A10000092F90000100AA0001 /* Debug */,
+				A100000A2F90000100AA0001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		B100000B2F90000100BB0001 /* Build configuration list for PBXNativeTarget "pushupShieldConfiguration" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B10000092F90000100BB0001 /* Debug */,
+				B100000A2F90000100BB0001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C100000B2F90000100CC0001 /* Build configuration list for PBXNativeTarget "pushupShieldAction" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C10000092F90000100CC0001 /* Debug */,
+				C100000A2F90000100CC0001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		863F36B62F8E6A8F009D1320 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/googleads/swift-package-manager-google-mobile-ads";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 13.2.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		863F36B82F8E6AAE009D1320 /* GoogleMobileAds */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 863F36B62F8E6A8F009D1320 /* XCRemoteSwiftPackageReference "swift-package-manager-google-mobile-ads" */;
+			productName = GoogleMobileAds;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 869B50B82F8AE63B002AD9FF /* Project object */;
 }
