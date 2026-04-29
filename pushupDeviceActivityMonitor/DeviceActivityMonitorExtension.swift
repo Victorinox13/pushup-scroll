@@ -8,16 +8,12 @@ final class DeviceActivityMonitorExtension: DeviceActivityMonitor {
     private let sharedSelectionKey = "screenTimeSelectionData"
     private let sharedUnlockEndsAtKey = "unlockEndsAt"
     private let unlockMonitorName = DeviceActivityName("deleeck.pushtounrot.unlock-monitor")
-    private let unlockThresholdEventName = DeviceActivityEvent.Name("deleeck.pushtounrot.unlock-threshold")
     private let shieldStore = ManagedSettingsStore(named: .init("pushup.shield"))
 
-    override func eventDidReachThreshold(
-        _ event: DeviceActivityEvent.Name,
-        activity: DeviceActivityName
-    ) {
-        super.eventDidReachThreshold(event, activity: activity)
+    override func intervalDidStart(for activity: DeviceActivityName) {
+        super.intervalDidStart(for: activity)
 
-        guard activity == unlockMonitorName, event == unlockThresholdEventName else { return }
+        guard activity == unlockMonitorName else { return }
         applyStoredShields()
     }
 

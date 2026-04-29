@@ -626,7 +626,7 @@
 				CODE_SIGN_ENTITLEMENTS = pushup/pushup.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 3N8TA3B8K6;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -634,7 +634,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = PushToUnrot;
+				INFOPLIST_KEY_CFBundleDisplayName = "Push Unrot";
 				INFOPLIST_KEY_NSCameraUsageDescription = "pushup-scroll uses the camera to verify your pushup movement and count completed reps before unlocking time for your selected apps.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "pushup-scroll uses motion data to confirm your phone is placed flat on the ground before a pushup session begins.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -673,7 +673,7 @@
 				CODE_SIGN_ENTITLEMENTS = pushup/pushup.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 3N8TA3B8K6;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -681,7 +681,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = PushToUnrot;
+				INFOPLIST_KEY_CFBundleDisplayName = "Push Unrot";
 				INFOPLIST_KEY_NSCameraUsageDescription = "pushup-scroll uses the camera to verify your pushup movement and count completed reps before unlocking time for your selected apps.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "pushup-scroll uses motion data to confirm your phone is placed flat on the ground before a pushup session begins.";
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;

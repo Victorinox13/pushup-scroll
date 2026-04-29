@@ -6,6 +6,7 @@
 //
 
 import AVFoundation
+import AudioToolbox
 import Combine
 import CoreMotion
 import DeviceActivity
@@ -18,10 +19,17 @@ import Vision
 
 struct RepBank {
     struct Offer: Identifiable, Hashable {
-        let minutes: Int
+        let durationSeconds: Int
         let repCost: Int
 
-        var id: String { "\(minutes)-\(repCost)" }
+        var id: String { "\(durationSeconds)-\(repCost)" }
+
+        var label: String {
+            if durationSeconds < 60 {
+                return "\(durationSeconds)s"
+            }
+            return "\(durationSeconds / 60)m"
+        }
     }
 
     let totalReps: Int
@@ -29,10 +37,10 @@ struct RepBank {
     let unlockedMinutes: Int
 
     let offers: [Offer] = [
-        Offer(minutes: 5, repCost: 2),
-        Offer(minutes: 15, repCost: 5),
-        Offer(minutes: 30, repCost: 10),
-        Offer(minutes: 60, repCost: 20)
+            Offer(durationSeconds: 5 * 60, repCost: 2),
+            Offer(durationSeconds: 15 * 60, repCost: 5),
+            Offer(durationSeconds: 30 * 60, repCost: 10),
+            Offer(durationSeconds: 60 * 60, repCost: 20)
     ]
 
     var repCoins: Int {
@@ -651,8 +659,10 @@ struct ContentView: View {
     @StateObject private var cameraModel = PushupCameraModel()
     @StateObject private var flatSurfaceModel = FlatSurfaceMotionModel()
     @StateObject private var rewardedAdManager = RewardedAdManager()
+    @State private var pendingUnlockOffer: RepBank.Offer?
     @State private var isTrackingReps = false
     @State private var showingSpendOptions = false
+    @State private var showingActiveUnlockWarning = false
     @State private var showingRewardBreakPrompt = false
     @State private var showingRotAwayPrompt = false
     @State private var showingMainMenuAdGate = false
@@ -674,10 +684,11 @@ struct ContentView: View {
     @State private var isRequestingScreenTimePermission = false
     @State private var isOpeningRepTracker = false
     @State private var showingMindfulPause = false
-    @State private var mindfulPauseSecondsRemaining = 25
+    @State private var mindfulPauseSecondsRemaining = 15
     @State private var mindfulPauseQuoteIndex = 0
     @State private var mindfulPauseSession = 0
     @State private var previousScreenBrightness: CGFloat?
+    @State private var loadingPushupDown = false
 
     private let shieldStore = ManagedSettingsStore(named: .init("pushup.shield"))
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -688,7 +699,6 @@ struct ContentView: View {
     private let sharedSelectionKey = "screenTimeSelectionData"
     private let sharedUnlockEndsAtKey = "unlockEndsAt"
     private let unlockMonitorName = DeviceActivityName("deleeck.pushtounrot.unlock-monitor")
-    private let unlockThresholdEventName = DeviceActivityEvent.Name("deleeck.pushtounrot.unlock-threshold")
 
     private var bank: RepBank {
         RepBank(
@@ -813,6 +823,7 @@ struct ContentView: View {
             print("[pushup] content view appeared")
             cameraModel.onRepCounted = {
                 pushupCount += 1
+                playRepCompletionFeedback()
                 print("[pushup] rep counted; total=\(pushupCount)")
                 if !hasCompletedInitialSetup,
                    onboardingCompletedReps >= introChallengeTarget {
@@ -903,7 +914,7 @@ struct ContentView: View {
             Button("Watch ad (instant) to scroll") {
                 watchRewardedBreak()
             }
-            Button("Wait 25s") {
+            Button("Wait 15s") {
                 startMindfulPause()
             }
         } message: {
@@ -914,11 +925,21 @@ struct ContentView: View {
             Button("Watch ad (instant)") {
                 watchRewardedBreak()
             }
-            Button("Wait 25s") {
+            Button("Wait 15s") {
                 startMindfulPause()
             }
         } message: {
             Text("Before you rot away, take a short pause. Watch an ad to scroll, or cancel and stay locked in.")
+        }
+        .alert("Keep PushToUnrot Open", isPresented: $showingActiveUnlockWarning) {
+            Button("Cancel", role: .cancel) {
+                pendingUnlockOffer = nil
+            }
+            Button("Start Timer") {
+                confirmPendingUnlock()
+            }
+        } message: {
+            Text("While your timer is active, do not swipe PushToUnrot away in the app switcher. iPhone may stop automatic relocking if the app is force-quit.")
         }
     }
 
@@ -939,25 +960,21 @@ struct ContentView: View {
     }
 
     private var loadingView: some View {
-        VStack(spacing: 24) {
+        VStack {
             Spacer()
 
-            VStack(alignment: .leading, spacing: 20) {
-                startupCardTitle("pushup", size: 44)
-
-                Text("Preparing your focus lock.")
-                    .font(.system(.title3, design: .rounded))
-                    .foregroundStyle(AppTheme.secondaryText)
-
-                ProgressView()
-                    .tint(AppTheme.accent)
+            loadingPushupAnimation
+                .frame(maxWidth: .infinity)
+            .onAppear {
+                guard !loadingPushupDown else { return }
+                withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                    loadingPushupDown = true
+                }
             }
-            .liquidGlassPanel(cornerRadius: 30, tint: AppTheme.panelTint)
-            .frame(maxWidth: .infinity, alignment: .leading)
 
             Spacer()
         }
-        .padding(20)
+        .padding(.horizontal, 20)
     }
 
     private var mainMenuLoadingView: some View {
@@ -985,6 +1002,45 @@ struct ContentView: View {
             Spacer()
         }
         .padding(20)
+    }
+
+    private var loadingPushupAnimation: some View {
+        ZStack {
+            VStack(spacing: 0) {
+                Circle()
+                    .fill(Color.white.opacity(0.95))
+                    .frame(width: 34, height: 34)
+                    .shadow(color: Color.white.opacity(0.25), radius: 8)
+                    .offset(y: loadingPushupDown ? 34 : -16)
+
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(AppTheme.accentBright)
+                    .frame(width: 120, height: 18)
+                    .rotationEffect(.degrees(loadingPushupDown ? 10 : -12), anchor: .leading)
+                    .offset(y: loadingPushupDown ? 10 : -4)
+                    .shadow(color: AppTheme.accentBright.opacity(0.28), radius: 10)
+
+                HStack(spacing: 18) {
+                    Capsule()
+                        .fill(Color.white.opacity(0.92))
+                        .frame(width: 18, height: 92)
+                        .rotationEffect(.degrees(loadingPushupDown ? 28 : 8), anchor: .top)
+                    Capsule()
+                        .fill(Color.white.opacity(0.92))
+                        .frame(width: 18, height: 92)
+                        .rotationEffect(.degrees(loadingPushupDown ? -6 : -24), anchor: .top)
+                }
+                .offset(y: loadingPushupDown ? -2 : -18)
+            }
+            .shadow(color: Color.black.opacity(0.18), radius: 20, y: 10)
+
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.white.opacity(0.18))
+                .frame(height: 12)
+                .frame(maxWidth: 220)
+                .offset(y: 74)
+        }
+        .frame(height: 220)
     }
 
     private var initialAppSelectionView: some View {
@@ -1170,9 +1226,20 @@ struct ContentView: View {
             }
 
             if unlockIsActive {
-                Text("Unlocked for \(formattedUnlockTime)")
-                    .font(.system(.subheadline, design: .rounded))
-                    .foregroundStyle(AppTheme.secondaryText)
+                HStack(spacing: 8) {
+                    Text("Time Left")
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .foregroundStyle(AppTheme.secondaryText)
+                        .textCase(.uppercase)
+
+                    Text(formattedUnlockTime)
+                        .font(.system(.headline, design: .rounded))
+                        .fontWeight(.heavy)
+                        .foregroundStyle(.white)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .liquidGlassPanel(cornerRadius: 16, tint: AppTheme.softTint, padding: 0)
             }
 
             HStack(spacing: 12) {
@@ -1217,10 +1284,11 @@ struct ContentView: View {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 90), spacing: 10)], spacing: 10) {
                     ForEach(bank.offers) { offer in
                         Button {
-                            redeem(offer)
+                            pendingUnlockOffer = offer
+                            showingActiveUnlockWarning = true
                         } label: {
                             VStack(spacing: 4) {
-                                Text("\(offer.minutes)m")
+                                Text(offer.label)
                                 Text("\(offer.repCost) reps")
                                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                             }
@@ -1386,15 +1454,9 @@ struct ContentView: View {
                 Spacer()
 
                 VStack(spacing: 20) {
-                    Text("Take 25 Seconds")
+                    Text("Take 15 Seconds")
                         .font(.system(size: 34, weight: .black, design: .rounded))
                         .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-
-                    Text("Pause before you scroll. Breathe, reset, and read the cue.")
-                        .font(.system(.title3, design: .rounded))
-                        .foregroundStyle(AppTheme.secondaryText)
-                        .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity)
 
                     ZStack {
@@ -1438,11 +1500,6 @@ struct ContentView: View {
                         .id(mindfulPauseQuoteIndex)
                         .transition(.opacity.combined(with: .scale(scale: 0.92)))
                         .animation(.spring(response: 0.7, dampingFraction: 0.82), value: mindfulPauseQuoteIndex)
-
-                    Text("Shop opens automatically when the timer ends.")
-                        .font(.system(.footnote, design: .rounded))
-                        .foregroundStyle(AppTheme.secondaryText)
-                        .frame(maxWidth: .infinity)
                 }
                 .frame(maxWidth: 360)
                 .liquidGlassPanel(cornerRadius: 32, tint: AppTheme.panelTint, padding: 24)
@@ -1934,6 +1991,14 @@ struct ContentView: View {
         UIScreen.main.brightness = 1
     }
 
+    private func playRepCompletionFeedback() {
+        let haptic = UINotificationFeedbackGenerator()
+        haptic.prepare()
+        haptic.notificationOccurred(.success)
+        AudioServicesPlaySystemSound(1057)
+        AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
+    }
+
     private func restoreScreenBrightnessIfNeeded() {
         guard let previousScreenBrightness else { return }
         UIScreen.main.brightness = previousScreenBrightness
@@ -1941,7 +2006,7 @@ struct ContentView: View {
     }
 
     private var mindfulPauseProgress: CGFloat {
-        let totalSeconds: CGFloat = 25
+        let totalSeconds: CGFloat = 15
         let completedSeconds = totalSeconds - CGFloat(mindfulPauseSecondsRemaining)
         return min(max(completedSeconds / totalSeconds, 0), 1)
     }
@@ -1959,14 +2024,22 @@ struct ContentView: View {
     private func redeem(_ offer: RepBank.Offer) {
         guard bank.canRedeem(offer) else { return }
         spentReps += offer.repCost
-        unlockedMinutes += offer.minutes
+        if offer.durationSeconds >= 60 {
+            unlockedMinutes += offer.durationSeconds / 60
+        }
         let start = max(unlockEndDate ?? .now, .now)
-        let endDate = start.addingTimeInterval(TimeInterval(offer.minutes * 60))
+        let endDate = start.addingTimeInterval(TimeInterval(offer.durationSeconds))
         unlockEndsAt = endDate.timeIntervalStorageValue
         syncSharedUnlockState(endDate.timeIntervalStorageValue)
         scheduleUnlockNotifications(for: endDate)
         scheduleUnlockMonitor(for: endDate)
         applyShields()
+        pendingUnlockOffer = nil
+    }
+
+    private func confirmPendingUnlock() {
+        guard let pendingUnlockOffer else { return }
+        redeem(pendingUnlockOffer)
     }
 
     private func watchRewardedBreak() {
@@ -1981,20 +2054,20 @@ struct ContentView: View {
         mindfulPauseSession += 1
         let session = mindfulPauseSession
 
-        mindfulPauseSecondsRemaining = 25
+        mindfulPauseSecondsRemaining = 15
         mindfulPauseQuoteIndex = 0
         withAnimation(.spring(response: 0.36, dampingFraction: 0.86)) {
             showingMindfulPause = true
         }
 
         Task { @MainActor in
-            for elapsedSecond in 1...25 {
+            for elapsedSecond in 1...15 {
                 try? await Task.sleep(for: .seconds(1))
                 guard session == mindfulPauseSession, showingMindfulPause else { return }
 
-                mindfulPauseSecondsRemaining = max(25 - elapsedSecond, 0)
+                mindfulPauseSecondsRemaining = max(15 - elapsedSecond, 0)
 
-                let nextQuoteIndex = min(elapsedSecond / 5, mindfulPauseQuotes.count - 1)
+                let nextQuoteIndex = min(elapsedSecond / 3, mindfulPauseQuotes.count - 1)
                 if nextQuoteIndex != mindfulPauseQuoteIndex {
                     withAnimation(.spring(response: 0.7, dampingFraction: 0.82)) {
                         mindfulPauseQuoteIndex = nextQuoteIndex
@@ -2157,7 +2230,12 @@ struct ContentView: View {
     private func syncUnlockStateFromSharedDefaults() {
         guard let sharedDefaults else { return }
         let sharedUnlockEndsAt = sharedDefaults.double(forKey: sharedUnlockEndsAtKey)
-        if unlockEndsAt != sharedUnlockEndsAt {
+        if sharedUnlockEndsAt > 0 {
+            let localUnlockEndsAt = unlockEndsAt
+            if sharedUnlockEndsAt > localUnlockEndsAt {
+                unlockEndsAt = sharedUnlockEndsAt
+            }
+        } else if unlockEndsAt <= currentTime.timeIntervalSince1970 {
             unlockEndsAt = sharedUnlockEndsAt
         }
     }
@@ -2169,21 +2247,17 @@ struct ContentView: View {
         }
 
         let now = Date()
-        let remainingSeconds = max(Int(ceil(endDate.timeIntervalSince(now))), 1)
-        let scheduleEndDate = Calendar.current.date(byAdding: .day, value: 1, to: now) ?? now.addingTimeInterval(86_400)
+        guard endDate > now else {
+            clearActiveUnlock()
+            applyShields()
+            return
+        }
 
-        var threshold = DateComponents()
-        threshold.second = remainingSeconds
-
-        let event = DeviceActivityEvent(
-            applications: familyActivitySelection.applicationTokens,
-            categories: familyActivitySelection.categoryTokens,
-            webDomains: familyActivitySelection.webDomainTokens,
-            threshold: threshold
-        )
+        let scheduleStartDate = endDate
+        let scheduleEndDate = endDate.addingTimeInterval(120)
 
         let schedule = DeviceActivitySchedule(
-            intervalStart: monitorDateComponents(for: now),
+            intervalStart: monitorDateComponents(for: scheduleStartDate),
             intervalEnd: monitorDateComponents(for: scheduleEndDate),
             repeats: false
         )
@@ -2192,12 +2266,8 @@ struct ContentView: View {
         center.stopMonitoring([unlockMonitorName])
 
         do {
-            try center.startMonitoring(
-                unlockMonitorName,
-                during: schedule,
-                events: [unlockThresholdEventName: event]
-            )
-            print("[pushup] unlock monitor scheduled; remainingSeconds=\(remainingSeconds)")
+            try center.startMonitoring(unlockMonitorName, during: schedule)
+            print("[pushup] unlock monitor scheduled; startsAt=\(scheduleStartDate) endsAt=\(scheduleEndDate)")
         } catch {
             print("[pushup] unlock monitor scheduling failed: \(error.localizedDescription)")
         }
@@ -2353,11 +2423,11 @@ struct ContentView: View {
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: ["unlock-warning", "unlock-ended"])
 
-        let warningInterval = endDate.timeIntervalSinceNow - 10
+        let warningInterval = endDate.timeIntervalSinceNow - 30
         if warningInterval > 0 {
             let content = UNMutableNotificationContent()
             content.title = "Time almost up"
-            content.body = "Your selected apps lock again in 10 seconds."
+            content.body = "Your selected apps lock again in 30 seconds."
             content.sound = .default
 
             let request = UNNotificationRequest(
