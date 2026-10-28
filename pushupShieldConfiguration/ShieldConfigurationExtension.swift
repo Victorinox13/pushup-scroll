@@ -12,15 +12,15 @@ final class ShieldConfigurationExtension: ShieldConfigurationDataSource {
             backgroundColor: UIColor(red: 0.09, green: 0.10, blue: 0.14, alpha: 0.94),
             icon: UIImage(systemName: "figure.strengthtraining.traditional"),
             title: ShieldConfiguration.Label(
-                text: "PushToUnrot Pause",
+                text: "RepCoin Pause",
                 color: .white
             ),
             subtitle: ShieldConfiguration.Label(
-                text: "\"\(quote)\" Open PushToUnrot, earn a few pushups, then come back to \(appName).",
+                text: "\"\(quote)\" Open RepCoin, earn a few pushups, then come back to \(appName).",
                 color: UIColor.white.withAlphaComponent(0.78)
             ),
             primaryButtonLabel: ShieldConfiguration.Label(
-                text: "Notify Me in PushToUnrot",
+                text: "Notify Me in RepCoin",
                 color: .white
             ),
             primaryButtonBackgroundColor: UIColor(red: 0.97, green: 0.47, blue: 0.20, alpha: 1),

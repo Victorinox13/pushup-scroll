@@ -66,8 +66,8 @@ final class ShieldActionExtension: ShieldActionDelegate {
         }
 
         let content = UNMutableNotificationContent()
-        content.title = "Return to PushToUnrot"
-        content.body = "Tap here to reopen PushToUnrot and get back on track."
+        content.title = "Return to RepCoin"
+        content.body = "Tap here to reopen RepCoin and get back on track."
         content.sound = .default
 
         let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1, repeats: false)

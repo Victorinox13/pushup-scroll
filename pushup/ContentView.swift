@@ -931,7 +931,7 @@ struct ContentView: View {
         } message: {
             Text("Before you rot away, take a short pause. Watch an ad to scroll, or cancel and stay locked in.")
         }
-        .alert("Keep PushToUnrot Open", isPresented: $showingActiveUnlockWarning) {
+        .alert("Keep RepCoin Open", isPresented: $showingActiveUnlockWarning) {
             Button("Cancel", role: .cancel) {
                 pendingUnlockOffer = nil
             }
@@ -939,7 +939,7 @@ struct ContentView: View {
                 confirmPendingUnlock()
             }
         } message: {
-            Text("While your timer is active, do not swipe PushToUnrot away in the app switcher. iPhone may stop automatic relocking if the app is force-quit.")
+            Text("While your timer is active, do not swipe RepCoin away in the app switcher. iPhone may stop automatic relocking if the app is force-quit.")
         }
     }
 
