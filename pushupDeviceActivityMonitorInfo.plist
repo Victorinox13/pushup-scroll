@@ -5,7 +5,7 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>$(DEVELOPMENT_LANGUAGE)</string>
     <key>CFBundleDisplayName</key>
-    <string>PushToUnrot Shield Action</string>
+    <string>RepCoin Monitor</string>
     <key>CFBundleExecutable</key>
     <string>$(EXECUTABLE_NAME)</string>
     <key>CFBundleIdentifier</key>
@@ -23,9 +23,9 @@
     <key>NSExtension</key>
     <dict>
         <key>NSExtensionPointIdentifier</key>
-        <string>com.apple.ManagedSettings.shield-action-service</string>
+        <string>com.apple.deviceactivity.monitor-extension</string>
         <key>NSExtensionPrincipalClass</key>
-        <string>$(PRODUCT_MODULE_NAME).ShieldActionExtension</string>
+        <string>$(PRODUCT_MODULE_NAME).DeviceActivityMonitorExtension</string>
     </dict>
 </dict>
 </plist>
